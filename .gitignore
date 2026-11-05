@@ -1,0 +1,22 @@
+# Node & Frontend
+node_modules/
+dist/
+.svelte-kit/
+build/
+package-lock.json
+
+# Rust & Tauri
+src-tauri/target/
+**/*.rs.bk
+Cargo.lock
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment & Logs
+.env
+.env.*
+*.log
