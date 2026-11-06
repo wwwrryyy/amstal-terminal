@@ -1,5 +1,7 @@
 <script lang="ts">
   // Svelte 5 Runes Workstation Shell
+  const STANDALONE_MNEMONICS = new Set(["HMM", "PORT", "GP", "FA", "DES", "HELP", "TOP"]);
+
   let omnibarInput = $state("NVDA US <EQUITY> FA <GO>");
   let activeTicker = $state("NVDA");
   let macroRegime = $state("LOW_VOLATILITY");
@@ -7,9 +9,16 @@
 
   function handleCommandSubmit(e: SubmitEvent) {
     e.preventDefault();
-    const parts = omnibarInput.trim().split(" ");
-    if (parts.length > 0) {
-      activeTicker = parts[0].toUpperCase();
+    const cleanTokens = omnibarInput
+      .trim()
+      .split(/\s+/)
+      .filter((t) => t && t.toUpperCase() !== "<GO>" && t.toUpperCase() !== "GO");
+
+    if (cleanTokens.length === 0) return;
+
+    const firstToken = cleanTokens[0].toUpperCase();
+    if (!STANDALONE_MNEMONICS.has(firstToken)) {
+      activeTicker = firstToken;
     }
   }
 </script>
