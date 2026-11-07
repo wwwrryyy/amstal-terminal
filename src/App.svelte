@@ -350,10 +350,14 @@
         </span>
       </div>
 
-      <!-- Regime Pill -->
-      <div class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded border border-[#172033] bg-[#06090F] text-2xs {regimeStateColor}">
+      <!-- Regime Pill with explicit Posterior Probability Label -->
+      <div
+        class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded border border-[#172033] bg-[#06090F] text-2xs {regimeStateColor}"
+        title="Forward-Filtered Active Regime Posterior Probability P(S_t). (See HMM panel for margin over runner-up state)"
+      >
         <span class="text-[#5E6D82]">REGIME:</span>
-        <span>{activeRegime.current_state.replace('_VOLATILITY', '')} ({regimeProbPct}%)</span>
+        <span class="font-bold">{activeRegime.current_state.replace('_VOLATILITY', '')}</span>
+        <span class="font-mono text-3xs">(P={regimeProbPct}%)</span>
       </div>
 
       <!-- Live UTC Clock -->
@@ -400,7 +404,7 @@
           <RegimePanel
             isMaximized={true}
             onToggleMaximize={() => (maximizedSlot = null)}
-            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+            onSwitchFunction={(fn: string) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
           />
         {:else if slotFunctions[maximizedSlot] === "FA"}
           <FinancialAnalysisPanel
@@ -511,7 +515,7 @@
               <RegimePanel
                 isMaximized={false}
                 onToggleMaximize={() => (maximizedSlot = slotIdx)}
-                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+                onSwitchFunction={(fn: string) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
               />
             {:else if slotFunctions[slotIdx] === "FA"}
               <FinancialAnalysisPanel

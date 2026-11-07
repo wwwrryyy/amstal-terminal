@@ -77,6 +77,22 @@
     isBuyAction ? +(l1NormBase * (kellyMultiplier / 0.5) * (kappa / 0.85)).toFixed(2) : 0.0
   );
 
+  // Clear execution rationale explaining why action is BUY, SELL, or HOLD
+  let executionRationale = $derived.by(() => {
+    const act = signal.execution_recommendation.action;
+    const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
+    const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
+    const frictionBps = signal.execution_recommendation.estimated_round_trip_cost_bps || 15;
+
+    if (act === "HOLD") {
+      return `HOLD RATIONALE: Edge (+${((pBuy - 0.45) * 100).toFixed(2)}%) below ${frictionBps} bps friction hurdle (Zero-skill prior guard active)`;
+    } else if (act === "BUY") {
+      return `ALLOCATE RATIONALE: Bull posterior ${(pBuy * 100).toFixed(1)}% exceeds hurdle; Kelly sized with κ=${kappa.toFixed(2)} haircut`;
+    } else {
+      return `EXIT RATIONALE: Downside posterior ${(pSell * 100).toFixed(1)}% > 35.0% threshold (Capital preservation hedge)`;
+    }
+  });
+
   // Expected growth rate g(f) = p_buy * ln(1 + f * r_win) + p_sell * ln(1 - f * r_loss) - friction
   let expectedGrowthRate = $derived.by(() => {
     const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
@@ -174,87 +190,100 @@
   </div>
 
   <!-- Main Split Layout: Top Kelly Sizer Card, Bottom Factor Breakdown -->
-  <div class="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-2 gap-2 text-xs">
-    <!-- Kelly Execution Summary Tile -->
-    <div class="grid grid-cols-4 gap-2 p-2 bg-[#06090F] border border-[#172033] rounded">
-      <!-- Action & Conviction -->
-      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
-        <span class="text-2xs text-[#5E6D82]">EXECUTION ACTION</span>
-        <div class="flex items-center gap-2 mt-1">
-          <span
-            class="px-2 py-0.5 text-xs font-bold rounded {signal.execution_recommendation.action === 'BUY'
-              ? 'bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40'
-              : signal.execution_recommendation.action === 'SELL'
-                ? 'bg-[#FF3344]/20 text-[#FF3344] border border-[#FF3344]/40'
-                : 'bg-[#FFB000]/20 text-[#FFB000] border border-[#FFB000]/40'}"
-          >
-            {signal.execution_recommendation.action}
+  <div class="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden p-2 gap-2 text-xs">
+    <!-- Kelly Execution Summary Tile with Rationale Bar -->
+    <div class="flex flex-col p-2 bg-[#06090F] border border-[#172033] rounded gap-1.5 shrink-0">
+      <div class="grid grid-cols-4 gap-2">
+        <!-- Action & Conviction -->
+        <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+          <span class="text-2xs text-[#5E6D82]">EXECUTION ACTION</span>
+          <div class="flex items-center gap-2 mt-1">
+            <span
+              class="px-2 py-0.5 text-xs font-bold rounded {signal.execution_recommendation.action === 'BUY'
+                ? 'bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40'
+                : signal.execution_recommendation.action === 'SELL'
+                  ? 'bg-[#FF3344]/20 text-[#FF3344] border border-[#FF3344]/40'
+                  : 'bg-[#FFB000]/20 text-[#FFB000] border border-[#FFB000]/40'}"
+            >
+              {signal.execution_recommendation.action}
+            </span>
+            <span class="text-2xs font-semibold text-[#00D2FF]">
+              {signal.execution_recommendation.conviction_tier}
+            </span>
+          </div>
+          <span class="text-2xs text-[#5E6D82] mt-1 font-mono">
+            ENGINE: {signal.winning_engine}
           </span>
-          <span class="text-2xs font-semibold text-[#00D2FF]">
-            {signal.execution_recommendation.conviction_tier}
-          </span>
         </div>
-        <span class="text-2xs text-[#5E6D82] mt-1 font-mono">
-          ENGINE: {signal.winning_engine}
-        </span>
+
+        <!-- Kelly Weights -->
+        <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+          <span class="text-2xs text-[#5E6D82]">ALLOCATION WEIGHT</span>
+          <div class="flex items-baseline gap-1 mt-1 font-mono">
+            <span class="text-sm font-bold text-[#FFB000]">{finalAllocPct}%</span>
+            <span class="text-2xs text-[#5E6D82]">(L1 Norm)</span>
+          </div>
+          <div class="text-2xs text-[#5E6D82] font-mono">
+            Unconstrained: <strong class="text-[#E6EDF5]">{unconstrainedKelly}%</strong>
+          </div>
+        </div>
+
+        <!-- Calibrated Probabilities -->
+        <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+          <span class="text-2xs text-[#5E6D82]">CALIBRATED POSTERIOR (T={signal.calibration.temperature})</span>
+          <div class="flex items-center gap-1.5 mt-1 font-mono text-2xs">
+            <span class="text-[#00FF66]">P(B): {(signal.calibration.calibrated_probabilities.outperform_buy * 100).toFixed(1)}%</span>
+            <span class="text-[#5E6D82]">|</span>
+            <span class="text-[#FFB000]">P(H): {(signal.calibration.calibrated_probabilities.neutral_hold * 100).toFixed(1)}%</span>
+            <span class="text-[#5E6D82]">|</span>
+            <span class="text-[#FF3344]">P(S): {(signal.calibration.calibrated_probabilities.underperform_sell * 100).toFixed(1)}%</span>
+          </div>
+          <div class="w-full bg-[#121824] h-1.5 rounded-full overflow-hidden flex mt-1">
+            <div style="width: {signal.calibration.calibrated_probabilities.outperform_buy * 100}%" class="bg-[#00FF66] h-full"></div>
+            <div style="width: {signal.calibration.calibrated_probabilities.neutral_hold * 100}%" class="bg-[#FFB000] h-full"></div>
+            <div style="width: {signal.calibration.calibrated_probabilities.underperform_sell * 100}%" class="bg-[#FF3344] h-full"></div>
+          </div>
+        </div>
+
+        <!-- Growth & Friction -->
+        <div class="flex flex-col justify-between">
+          <span class="text-2xs text-[#5E6D82]">EXPECTED GROWTH g(f)</span>
+          <div class="flex items-baseline gap-1 mt-1 font-mono">
+            <span class="text-sm font-bold text-[#00FF66]">+{expectedGrowthRate}%</span>
+            <span class="text-2xs text-[#5E6D82]">ann.</span>
+          </div>
+          <div class="text-2xs text-[#5E6D82] font-mono">
+            Friction: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong> | &kappa;: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}</strong>
+          </div>
+        </div>
       </div>
 
-      <!-- Kelly Weights -->
-      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
-        <span class="text-2xs text-[#5E6D82]">ALLOCATION WEIGHT</span>
-        <div class="flex items-baseline gap-1 mt-1 font-mono">
-          <span class="text-sm font-bold text-[#FFB000]">{finalAllocPct}%</span>
-          <span class="text-2xs text-[#5E6D82]">(L1 Norm)</span>
+      <!-- Dedicated One-Line Rationale Strip -->
+      <div class="pt-1.5 border-t border-[#172033] flex items-center justify-between text-2xs font-mono">
+        <div class="flex items-center gap-1.5">
+          <span class={signal.execution_recommendation.action === 'BUY' ? 'text-[#00FF66]' : signal.execution_recommendation.action === 'SELL' ? 'text-[#FF3344]' : 'text-[#FFB000]'}>●</span>
+          <span class="text-[#E6EDF5] font-semibold">{executionRationale}</span>
         </div>
-        <div class="text-2xs text-[#5E6D82] font-mono">
-          Unconstrained: <strong class="text-[#E6EDF5]">{unconstrainedKelly}%</strong>
-        </div>
-      </div>
-
-      <!-- Calibrated Probabilities -->
-      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
-        <span class="text-2xs text-[#5E6D82]">CALIBRATED POSTERIOR (T={signal.calibration.temperature})</span>
-        <div class="flex items-center gap-1.5 mt-1 font-mono text-2xs">
-          <span class="text-[#00FF66]">P(B): {(signal.calibration.calibrated_probabilities.outperform_buy * 100).toFixed(1)}%</span>
-          <span class="text-[#5E6D82]">|</span>
-          <span class="text-[#FFB000]">P(H): {(signal.calibration.calibrated_probabilities.neutral_hold * 100).toFixed(1)}%</span>
-          <span class="text-[#5E6D82]">|</span>
-          <span class="text-[#FF3344]">P(S): {(signal.calibration.calibrated_probabilities.underperform_sell * 100).toFixed(1)}%</span>
-        </div>
-        <div class="w-full bg-[#121824] h-1.5 rounded-full overflow-hidden flex mt-1">
-          <div style="width: {signal.calibration.calibrated_probabilities.outperform_buy * 100}%" class="bg-[#00FF66] h-full"></div>
-          <div style="width: {signal.calibration.calibrated_probabilities.neutral_hold * 100}%" class="bg-[#FFB000] h-full"></div>
-          <div style="width: {signal.calibration.calibrated_probabilities.underperform_sell * 100}%" class="bg-[#FF3344] h-full"></div>
-        </div>
-      </div>
-
-      <!-- Growth & Friction -->
-      <div class="flex flex-col justify-between">
-        <span class="text-2xs text-[#5E6D82]">EXPECTED GROWTH g(f)</span>
-        <div class="flex items-baseline gap-1 mt-1 font-mono">
-          <span class="text-sm font-bold text-[#00FF66]">+{expectedGrowthRate}%</span>
-          <span class="text-2xs text-[#5E6D82]">ann.</span>
-        </div>
-        <div class="text-2xs text-[#5E6D82] font-mono">
-          Friction: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong> | &kappa;: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}</strong>
+        <div class="text-[#5E6D82] text-3xs">
+          EXECUTION: {signal.execution_mode}
         </div>
       </div>
     </div>
 
-    <!-- Factor Ranks Breakdown Table -->
-    <div class="flex-1 flex flex-col bg-[#06090F] border border-[#172033] rounded overflow-hidden">
-      <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] text-2xs font-bold text-[#5E6D82] border-b border-[#172033]">
+    <!-- Factor Ranks Breakdown Table (Fully unclipped with min-h-0 and smooth scrolling) -->
+    <div class="flex-1 min-h-0 flex flex-col bg-[#06090F] border border-[#172033] rounded overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] text-2xs font-bold text-[#5E6D82] border-b border-[#172033] shrink-0">
         <span class="w-1/3">ALPHA FACTOR</span>
         <span class="w-1/4">CATEGORY</span>
         <span class="w-1/6 text-right">RAW SCORE</span>
         <span class="w-1/4 pl-4">NORMALIZED RANK / DISPERSION</span>
       </div>
 
-      <div class="flex-1 overflow-y-auto divide-y divide-[#172033]/60">
+      <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-2">
         {#each Object.entries(signal.signal_breakdown) as [key, val]}
           {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
           {@const bar = getBarWidth(val, meta.min, meta.max)}
-          <div class="flex items-center justify-between px-3 py-1 text-2xs hover:bg-[#0C111B] transition-colors">
+          <div class="flex items-center justify-between px-3 py-[3px] text-2xs hover:bg-[#0C111B] transition-colors">
             <span class="w-1/3 font-semibold text-[#E6EDF5] truncate" title={meta.label}>
               {meta.label}
             </span>

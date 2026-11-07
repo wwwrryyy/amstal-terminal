@@ -59,6 +59,40 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     expect(revRow?.values["FY2024"]).toBeGreaterThan(0);
   });
 
+  it("strictly enforces GAAP internal arithmetic consistency across all periods (AAPL & NVDA)", () => {
+    for (const ticker of ["AAPL", "NVDA", "MSFT"]) {
+      const lakehouse = get10YFinancialLakehouse(ticker, true);
+      const rev = lakehouse.incomeStatement.find((r) => r.tag === "Revenues")!;
+      const cost = lakehouse.incomeStatement.find((r) => r.tag === "CostOfRevenue")!;
+      const gp = lakehouse.incomeStatement.find((r) => r.tag === "GrossProfit")!;
+      const opex = lakehouse.incomeStatement.find((r) => r.tag === "OperatingExpenses")!;
+      const opInc = lakehouse.incomeStatement.find((r) => r.tag === "OperatingIncome")!;
+      const ocf = lakehouse.cashFlow.find((r) => r.tag === "OperatingCashFlow")!;
+      const capex = lakehouse.cashFlow.find((r) => r.tag === "CapitalExpenditures")!;
+      const fcf = lakehouse.cashFlow.find((r) => r.tag === "FreeCashFlow")!;
+
+      for (const f of lakehouse.filings) {
+        const p = f.period;
+        // Gross Profit = Revenue - Cost of Revenue
+        expect(gp.values[p]).toBe(rev.values[p]! - cost.values[p]!);
+        // Operating Income = Gross Profit - OpEx
+        expect(opInc.values[p]).toBe(gp.values[p]! - opex.values[p]!);
+        // Free Cash Flow = Cash from Operations - CapEx
+        expect(fcf.values[p]).toBe(ocf.values[p]! - capex.values[p]!);
+      }
+    }
+
+    // Specific Apple financial verification
+    const aapl = get10YFinancialLakehouse("AAPL", true);
+    const aaplRev = aapl.incomeStatement.find((r) => r.tag === "Revenues")!;
+    // Apple FY24 revenue ~$391.0B (391,035M)
+    expect(aaplRev.values["FY2024"]).toBe(391035);
+    // Apple FY21 revenue ~$365.8B
+    expect(aaplRev.values["FY2021"]).toBe(365817);
+    // Apple FY20 revenue ~$274.5B
+    expect(aaplRev.values["FY2020"]).toBe(274515);
+  });
+
   it("handles PIT Strict vs As-Restated cutoff modes", () => {
     const pitLakehouse = get10YFinancialLakehouse("NVDA", true);
     const restatedLakehouse = get10YFinancialLakehouse("NVDA", false);

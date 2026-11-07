@@ -97,6 +97,10 @@
         textColor: "#5E6D82",
         fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace",
         fontSize: 11,
+        attributionLogo: false,
+      },
+      watermark: {
+        visible: false,
       },
       grid: {
         vertLines: { color: "#121824", style: LineStyle.Dotted },
@@ -142,14 +146,17 @@
 
     volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
-      priceScaleId: "", // overlay scale
+      priceScaleId: "volume",
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
 
-    volumeSeries.priceScale().applyOptions({
+    chart.priceScale("volume").applyOptions({
       scaleMargins: {
-        top: 0.8,
+        top: 0.82,
         bottom: 0,
       },
+      visible: false,
     });
 
     loadData();
@@ -559,5 +566,14 @@
   .text-2xs {
     font-size: 0.6875rem; /* 11px */
     line-height: 0.95rem;
+  }
+
+  :global(#tv-attr-logo),
+  :global(.tv-attr-logo),
+  :global(a[href*="tradingview"]) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 </style>
