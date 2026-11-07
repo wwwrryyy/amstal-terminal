@@ -96,14 +96,28 @@
 
     unsubscribeIpc = ipcService.subscribe((frame) => {
       if (frame.macro_regime) {
-        activeRegime = frame.macro_regime;
+        const newReg = frame.macro_regime;
+        if (
+          newReg.current_state !== activeRegime.current_state ||
+          Math.abs((newReg.filtered_probabilities?.low_volatility ?? 0) - (activeRegime.filtered_probabilities?.low_volatility ?? 0)) >= 0.005
+        ) {
+          activeRegime = newReg;
+        }
       }
       const sym = activeTicker.toUpperCase();
       if (frame.signals && frame.signals[sym]) {
-        activeSignal = frame.signals[sym];
+        const newSig = frame.signals[sym];
+        const oldPrice = activeSignal.execution_recommendation.entry_price;
+        const newPrice = newSig.execution_recommendation.entry_price;
+        if (Math.abs(newPrice - oldPrice) >= 0.01 || newSig.execution_recommendation.action !== activeSignal.execution_recommendation.action) {
+          activeSignal = newSig;
+        }
       }
       if (frame.ticks && frame.ticks[sym]) {
-        activeTick = frame.ticks[sym];
+        const newTick = frame.ticks[sym];
+        if (newTick.price !== activeTick.price || newTick.change !== activeTick.change) {
+          activeTick = newTick;
+        }
       }
     });
 
@@ -598,7 +612,7 @@
 
     <!-- Center: Telemetry Status -->
     <div class="hidden md:flex items-center gap-3 font-mono">
-      <span>FEED: <strong class="text-[#00FF66]">100ms CONFLATION</strong></span>
+      <span>FEED: <strong class="text-[#00FF66]">250ms CONFLATION</strong></span>
       <span class="text-[#232F48]">|</span>
       <span>IPC: <strong class="text-[#8B98A5]">/tmp/amstal.sock</strong></span>
       <span class="text-[#232F48]">|</span>

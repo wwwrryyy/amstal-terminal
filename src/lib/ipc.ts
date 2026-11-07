@@ -225,14 +225,16 @@ export class IpcClientService {
     }
   }
 
+  private simulationTickCount: number = 0;
+
   private startSimulation(): void {
     this.setStatus("SIMULATED_FALLBACK");
     if (this.simulationTimer) return;
 
-    // Simulate 100ms conflated engine ticks
+    // Simulate 250ms conflated engine ticks (4Hz institutional standard)
     this.simulationTimer = setInterval(() => {
       this.stepSimulation();
-    }, 100);
+    }, 250);
   }
 
   private stopSimulation(): void {
@@ -243,11 +245,30 @@ export class IpcClientService {
   }
 
   private stepSimulation(): void {
+    this.simulationTickCount++;
     const updatedTicks: Record<string, TickData> = {};
     const updatedSignals: Record<string, QARESignalFrame> = {};
 
-    // Micro jitter for ticks
-    for (const [ticker, currentTick] of this.ticks.entries()) {
+    const allTickers = Array.from(this.ticks.keys());
+    if (allTickers.length === 0) return;
+
+    // Conflate micro-ticks across 2 rotating symbols per cycle to eliminate UI flood
+    const targetCount = Math.min(2, allTickers.length);
+    const startIdx = (this.simulationTickCount * 2) % allTickers.length;
+    const activeSubSet: string[] = [];
+    for (let i = 0; i < targetCount; i++) {
+      activeSubSet.push(allTickers[(startIdx + i) % allTickers.length]);
+    }
+
+    // Ensure NVDA (default hero) receives periodic ticks
+    if (!activeSubSet.includes("NVDA") && this.ticks.has("NVDA") && this.simulationTickCount % 2 === 0) {
+      activeSubSet.push("NVDA");
+    }
+
+    for (const ticker of activeSubSet) {
+      const currentTick = this.ticks.get(ticker);
+      if (!currentTick) continue;
+
       const delta = (Math.random() - 0.495) * (currentTick.price * 0.0006);
       const newPrice = +(currentTick.price + delta).toFixed(2);
       const change = +(currentTick.change + delta).toFixed(2);
@@ -265,50 +286,59 @@ export class IpcClientService {
       this.ticks.set(ticker, updated);
       updatedTicks[ticker] = updated;
 
-      // Update signal frame price and barriers
+      // Only update and emit signals when price moves meaningfully (>= 0.15%) or every 16 cycles (~4s)
       const currentSig = this.signals.get(ticker) ?? createDefaultSignalFrame(ticker, newPrice);
-      const atr = newPrice * 0.035;
-      const dynamicTakeProfit = +(newPrice + 2.0 * atr).toFixed(2);
-      const dynamicStopLoss = +(newPrice - 1.0 * atr).toFixed(2);
+      const oldPrice = currentSig.execution_recommendation.entry_price || newPrice;
+      const priceDiffPct = Math.abs(newPrice - oldPrice) / oldPrice;
 
-      const updatedSig: QARESignalFrame = {
-        ...currentSig,
-        timestamp_utc: new Date().toISOString(),
-        execution_recommendation: {
-          ...currentSig.execution_recommendation,
-          entry_price: newPrice,
-          dynamic_take_profit: dynamicTakeProfit,
-          dynamic_stop_loss: dynamicStopLoss,
-        },
-      };
-      this.signals.set(ticker, updatedSig);
-      updatedSignals[ticker] = updatedSig;
+      if (priceDiffPct >= 0.0015 || this.simulationTickCount % 16 === 0) {
+        const atr = newPrice * 0.035;
+        const dynamicTakeProfit = +(newPrice + 2.0 * atr).toFixed(2);
+        const dynamicStopLoss = +(newPrice - 1.0 * atr).toFixed(2);
+
+        const updatedSig: QARESignalFrame = {
+          ...currentSig,
+          timestamp_utc: new Date().toISOString(),
+          execution_recommendation: {
+            ...currentSig.execution_recommendation,
+            entry_price: newPrice,
+            dynamic_take_profit: dynamicTakeProfit,
+            dynamic_stop_loss: dynamicStopLoss,
+          },
+        };
+        this.signals.set(ticker, updatedSig);
+        updatedSignals[ticker] = updatedSig;
+      }
     }
 
-    // Micro regime drift (strictly bounded on simplex so sum == 1.0 and p_i > 0)
-    const rawLow = Math.min(0.92, Math.max(0.65, this.macroRegime.filtered_probabilities.low_volatility + (Math.random() - 0.5) * 0.002));
-    const maxMed = Math.max(0.04, 0.99 - rawLow);
-    const rawMed = Math.min(maxMed, Math.max(0.04, this.macroRegime.filtered_probabilities.medium_volatility + (Math.random() - 0.5) * 0.002));
-    const probLow = +rawLow.toFixed(3);
-    const probMed = +rawMed.toFixed(3);
-    const probHigh = +Math.max(0.001, 1.0 - probLow - probMed).toFixed(3);
+    // Only drift macro regime every 20 cycles (~5 seconds) to avoid constant matrix recalculations
+    let emittedRegime: MacroRegimeData | undefined = undefined;
+    if (this.simulationTickCount % 20 === 0) {
+      const rawLow = Math.min(0.92, Math.max(0.65, this.macroRegime.filtered_probabilities.low_volatility + (Math.random() - 0.5) * 0.002));
+      const maxMed = Math.max(0.04, 0.99 - rawLow);
+      const rawMed = Math.min(maxMed, Math.max(0.04, this.macroRegime.filtered_probabilities.medium_volatility + (Math.random() - 0.5) * 0.002));
+      const probLow = +rawLow.toFixed(3);
+      const probMed = +rawMed.toFixed(3);
+      const probHigh = +Math.max(0.001, 1.0 - probLow - probMed).toFixed(3);
 
-    this.macroRegime = {
-      ...this.macroRegime,
-      filtered_probabilities: {
-        low_volatility: probLow,
-        medium_volatility: probMed,
-        high_volatility: probHigh,
-      },
-    };
+      this.macroRegime = {
+        ...this.macroRegime,
+        filtered_probabilities: {
+          low_volatility: probLow,
+          medium_volatility: probMed,
+          high_volatility: probHigh,
+        },
+      };
+      emittedRegime = this.macroRegime;
+    }
 
     const conflatedFrame: ConflatedStreamFrame = {
       type: "CONFLATED_STREAM_FRAME",
-      conflation_interval_ms: 100,
+      conflation_interval_ms: 250,
       timestamp_ms: Date.now(),
       ticks: updatedTicks,
-      signals: updatedSignals,
-      macro_regime: this.macroRegime,
+      signals: Object.keys(updatedSignals).length > 0 ? updatedSignals : undefined,
+      macro_regime: emittedRegime,
     };
 
     for (const listener of this.listeners) {

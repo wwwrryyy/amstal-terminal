@@ -172,11 +172,17 @@
       }
     });
 
-    // Resize observer
+    // Resize observer with dimension change guard
+    let lastWidth = 0;
+    let lastHeight = 0;
     resizeObserver = new ResizeObserver((entries) => {
       if (!entries || entries.length === 0 || !chart) return;
       const { width, height } = entries[0].contentRect;
-      chart.applyOptions({ width, height });
+      if (width > 0 && height > 0 && (Math.abs(width - lastWidth) > 1 || Math.abs(height - lastHeight) > 1)) {
+        lastWidth = width;
+        lastHeight = height;
+        chart.applyOptions({ width, height });
+      }
     });
     resizeObserver.observe(chartContainer);
   }
@@ -211,10 +217,28 @@
     chart.timeScale().fitContent();
   }
 
-  function renderTripleBarriers() {
-    if (!candleSeries) return;
+  let lastTpPrice = -1;
+  let lastSlPrice = -1;
+  let lastEntryPrice = -1;
+  let lastMarkerTime: Time | null = null;
+  let rafId: number | null = null;
+  let pendingCandleUpdate: { time: Time; open: number; high: number; low: number; close: number } | null = null;
 
-    // Remove existing lines
+  function scheduleCandleUpdate(candle: { time: Time; open: number; high: number; low: number; close: number }) {
+    pendingCandleUpdate = candle;
+    if (rafId === null) {
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (candleSeries && pendingCandleUpdate) {
+          candleSeries.update(pendingCandleUpdate);
+          pendingCandleUpdate = null;
+        }
+      });
+    }
+  }
+
+  function clearBarriers() {
+    if (!candleSeries) return;
     if (tpLine) {
       candleSeries.removePriceLine(tpLine);
       tpLine = null;
@@ -227,9 +251,18 @@
       candleSeries.removePriceLine(entryLine);
       entryLine = null;
     }
+    candleSeries.setMarkers([]);
+    lastTpPrice = -1;
+    lastSlPrice = -1;
+    lastEntryPrice = -1;
+    lastMarkerTime = null;
+  }
+
+  function renderTripleBarriers() {
+    if (!candleSeries) return;
 
     if (!showBarriers || bars.length === 0) {
-      candleSeries.setMarkers([]);
+      clearBarriers();
       return;
     }
 
@@ -238,48 +271,79 @@
     const tpPrice = rec.dynamic_take_profit || +(entryPrice * 1.07).toFixed(2);
     const slPrice = rec.dynamic_stop_loss || +(entryPrice * 0.965).toFixed(2);
 
-    // 1. Take Profit Barrier (Horizontal Upper)
-    tpLine = candleSeries.createPriceLine({
-      price: tpPrice,
-      color: "#00E676",
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: `TP: $${tpPrice.toFixed(2)} (+2.0 ATR)`,
-    });
+    // 1. Take Profit Barrier (Horizontal Upper) - reuse or update
+    if (!tpLine) {
+      tpLine = candleSeries.createPriceLine({
+        price: tpPrice,
+        color: "#00FF66",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `TP: $${tpPrice.toFixed(2)} (+2.0 ATR)`,
+      });
+      lastTpPrice = tpPrice;
+    } else if (Math.abs(lastTpPrice - tpPrice) >= 0.01) {
+      tpLine.applyOptions({
+        price: tpPrice,
+        title: `TP: $${tpPrice.toFixed(2)} (+2.0 ATR)`,
+      });
+      lastTpPrice = tpPrice;
+    }
 
-    // 2. Entry Price Level
-    entryLine = candleSeries.createPriceLine({
-      price: entryPrice,
-      color: "#00D2FF",
-      lineWidth: 1,
-      lineStyle: LineStyle.Dotted,
-      axisLabelVisible: true,
-      title: `ENTRY: $${entryPrice.toFixed(2)}`,
-    });
+    // 2. Entry Price Level - reuse or update
+    if (!entryLine) {
+      entryLine = candleSeries.createPriceLine({
+        price: entryPrice,
+        color: "#00D2FF",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: `ENTRY: $${entryPrice.toFixed(2)}`,
+      });
+      lastEntryPrice = entryPrice;
+    } else if (Math.abs(lastEntryPrice - entryPrice) >= 0.01) {
+      entryLine.applyOptions({
+        price: entryPrice,
+        title: `ENTRY: $${entryPrice.toFixed(2)}`,
+      });
+      lastEntryPrice = entryPrice;
+    }
 
-    // 3. Stop Loss Barrier (Horizontal Lower)
-    slLine = candleSeries.createPriceLine({
-      price: slPrice,
-      color: "#FF3366",
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: `SL: $${slPrice.toFixed(2)} (-1.0 ATR)`,
-    });
+    // 3. Stop Loss Barrier (Horizontal Lower) - reuse or update
+    if (!slLine) {
+      slLine = candleSeries.createPriceLine({
+        price: slPrice,
+        color: "#FF3344",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `SL: $${slPrice.toFixed(2)} (-1.0 ATR)`,
+      });
+      lastSlPrice = slPrice;
+    } else if (Math.abs(lastSlPrice - slPrice) >= 0.01) {
+      slLine.applyOptions({
+        price: slPrice,
+        title: `SL: $${slPrice.toFixed(2)} (-1.0 ATR)`,
+      });
+      lastSlPrice = slPrice;
+    }
 
-    // 4. Vertical Time Barrier marker at last bar
+    // 4. Vertical Time Barrier marker at last bar (only update on timestamp change)
     const lastBar = bars[bars.length - 1];
-    const markers: SeriesMarker<Time>[] = [
-      {
-        time: lastBar.time as Time,
-        position: "aboveBar",
-        color: "#FF9E00",
-        shape: "arrowDown",
-        text: "T_0 ENTRY",
-      },
-    ];
-    candleSeries.setMarkers(markers);
+    const barTime = lastBar.time as Time;
+    if (lastMarkerTime !== barTime) {
+      const markers: SeriesMarker<Time>[] = [
+        {
+          time: barTime,
+          position: "aboveBar",
+          color: "#FFB000",
+          shape: "arrowDown",
+          text: "T_0 ENTRY",
+        },
+      ];
+      candleSeries.setMarkers(markers);
+      lastMarkerTime = barTime;
+    }
   }
 
   // Effect to react to ticker changes
@@ -297,29 +361,43 @@
     unsubscribeIpc = ipcService.subscribe((frame) => {
       const sym = ticker.toUpperCase();
       if (frame.ticks && frame.ticks[sym]) {
-        currentTick = frame.ticks[sym];
-        // Update the last candle with live tick
-        if (candleSeries && bars.length > 0) {
-          const last = bars[bars.length - 1];
-          const newPrice = currentTick.price;
-          const updatedLast = {
-            time: last.time as Time,
-            open: last.open,
-            high: Math.max(last.high, newPrice),
-            low: Math.min(last.low, newPrice),
-            close: newPrice,
-          };
-          candleSeries.update(updatedLast);
+        const newTick = frame.ticks[sym];
+        if (newTick.price !== currentTick.price) {
+          currentTick = newTick;
+          // Update the last candle with live tick throttled to RAF
+          if (candleSeries && bars.length > 0) {
+            const last = bars[bars.length - 1];
+            const newPrice = currentTick.price;
+            last.high = Math.max(last.high, newPrice);
+            last.low = Math.min(last.low, newPrice);
+            last.close = newPrice;
+            scheduleCandleUpdate({
+              time: last.time as Time,
+              open: last.open,
+              high: last.high,
+              low: last.low,
+              close: last.close,
+            });
+          }
         }
       }
       if (frame.signals && frame.signals[sym]) {
-        currentSignal = frame.signals[sym];
-        renderTripleBarriers();
+        const newSig = frame.signals[sym];
+        const oldEntry = currentSignal.execution_recommendation.entry_price;
+        const newEntry = newSig.execution_recommendation.entry_price;
+        if (Math.abs(newEntry - oldEntry) >= 0.01 || newSig.execution_recommendation.action !== currentSignal.execution_recommendation.action) {
+          currentSignal = newSig;
+          renderTripleBarriers();
+        }
       }
     });
   });
 
   onDestroy(() => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
     if (unsubscribeIpc) unsubscribeIpc();
     if (resizeObserver) resizeObserver.disconnect();
     if (chart) {
@@ -466,7 +544,7 @@
       </div>
     {:else}
       <div class="text-[#5E6D82] text-2xs">
-        100ms CONFLATION | ATR TRIPLE BARRIERS
+        250ms CONFLATION | ATR TRIPLE BARRIERS
       </div>
     {/if}
   </div>

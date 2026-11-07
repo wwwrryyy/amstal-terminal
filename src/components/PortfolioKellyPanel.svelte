@@ -48,7 +48,16 @@
     unsubscribeIpc = ipcService.subscribe((frame) => {
       const sym = ticker.toUpperCase();
       if (frame.signals && frame.signals[sym]) {
-        signal = frame.signals[sym];
+        const newSig = frame.signals[sym];
+        const oldEntry = signal.execution_recommendation.entry_price;
+        const newEntry = newSig.execution_recommendation.entry_price;
+        if (
+          Math.abs(newEntry - oldEntry) >= 0.01 ||
+          newSig.execution_recommendation.action !== signal.execution_recommendation.action ||
+          newSig.winning_engine !== signal.winning_engine
+        ) {
+          signal = newSig;
+        }
       }
     });
   });

@@ -19,7 +19,13 @@
   onMount(() => {
     unsubscribeIpc = ipcService.subscribe((frame) => {
       if (frame.macro_regime) {
-        regime = frame.macro_regime;
+        const newReg = frame.macro_regime;
+        if (
+          newReg.current_state !== regime.current_state ||
+          Math.abs((newReg.filtered_probabilities?.low_volatility ?? 0) - (regime.filtered_probabilities?.low_volatility ?? 0)) >= 0.005
+        ) {
+          regime = newReg;
+        }
       }
     });
   });
