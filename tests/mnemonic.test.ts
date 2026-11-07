@@ -23,12 +23,28 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
   });
 
   it("parses standalone mnemonics: HMM <GO>, PORT <GO>, GP <GO>, FA <GO>", () => {
-    for (const m of ["HMM", "PORT", "GP", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP", "GRID", "ALL", "HELP", "TOP"]) {
+    for (const m of ["HMM", "PORT", "GP", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP", "ANR", "COPILOT", "GRID", "ALL", "HELP", "TOP"]) {
       const res = parse_mnemonic_command(`${m} <GO>`);
       expect(res.is_valid).toBe(true);
       expect(res.has_go).toBe(true);
       expect(res.mnemonic).toBe(m);
     }
+  });
+
+  it("parses Tier 2 Step 3 commands: NVDA ANR <GO>, COPILOT <GO>, TSLA COPILOT <GO>", () => {
+    const resAnr = parse_mnemonic_command("NVDA US <EQUITY> ANR <GO>");
+    expect(resAnr.is_valid).toBe(true);
+    expect(resAnr.identifier).toBe("NVDA");
+    expect(resAnr.mnemonic).toBe("ANR");
+
+    const resCopilot = parse_mnemonic_command("COPILOT <GO>");
+    expect(resCopilot.is_valid).toBe(true);
+    expect(resCopilot.mnemonic).toBe("COPILOT");
+
+    const resTickerCopilot = parse_mnemonic_command("TSLA COPILOT <GO>");
+    expect(resTickerCopilot.is_valid).toBe(true);
+    expect(resTickerCopilot.identifier).toBe("TSLA");
+    expect(resTickerCopilot.mnemonic).toBe("COPILOT");
   });
 
   it("parses Tier 1/2 commands: NVDA DES <GO>, CRWD SPLC <GO>, EDGAR, NEWS, HP", () => {

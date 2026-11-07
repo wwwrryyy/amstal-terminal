@@ -9,11 +9,13 @@
   import EdgarRedlinePanel from "./components/EdgarRedlinePanel.svelte";
   import NewsSentimentPanel from "./components/NewsSentimentPanel.svelte";
   import HistoricalPricePanel from "./components/HistoricalPricePanel.svelte";
+  import AnalystRatingsPanel from "./components/AnalystRatingsPanel.svelte";
+  import CopilotPanel from "./components/CopilotPanel.svelte";
   import { ipcService, type ConnectionState } from "./lib/ipc";
   import { parse_mnemonic_command, STANDALONE_MNEMONICS } from "./lib/mnemonic";
   import type { ColorChannel, MacroRegimeData, QARESignalFrame, TickData } from "./lib/types";
 
-  type FunctionMnemonic = "GP" | "PORT" | "HMM" | "FA" | "DES" | "SPLC" | "EDGAR" | "NEWS" | "HP";
+  type FunctionMnemonic = "GP" | "PORT" | "HMM" | "FA" | "DES" | "SPLC" | "EDGAR" | "NEWS" | "HP" | "ANR" | "COPILOT";
 
   // Reactive Multi-Panel Workstation State
   let omnibarInput = $state("NVDA US <EQUITY> GP <GO>");
@@ -147,7 +149,7 @@
 
     // Mnemonic Action
     const m = parsed.mnemonic.toUpperCase();
-    if (["GP", "PORT", "HMM", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP"].includes(m)) {
+    if (["GP", "PORT", "HMM", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP", "ANR", "COPILOT"].includes(m)) {
       slotFunctions[focusedSlot] = m as FunctionMnemonic;
     } else if (m === "GRID" || m === "ALL") {
       maximizedSlot = null;
@@ -216,6 +218,10 @@
       e.preventDefault();
       slotFunctions[focusedSlot] = "HP";
       omnibarInput = `${getSlotTicker(focusedSlot)} HP <GO>`;
+    } else if (e.key === "F12") {
+      e.preventDefault();
+      slotFunctions[focusedSlot] = "COPILOT";
+      omnibarInput = `${getSlotTicker(focusedSlot)} COPILOT <GO>`;
     } else if (e.key === "Escape") {
       if (showHelpModal) {
         showHelpModal = false;
@@ -388,6 +394,9 @@
       <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} HP <GO>`)}>
         <strong class="text-[#00D2FF]">F11</strong> HP &lt;PRICES&gt;
       </button>
+      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} COPILOT <GO>`)}>
+        <strong class="text-[#FF9E00]">F12</strong> COPILOT &lt;AI&gt;
+      </button>
     </div>
 
     <div class="flex items-center gap-2">
@@ -481,6 +490,25 @@
             onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
             onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
           />
+        {:else if slotFunctions[maximizedSlot] === "ANR"}
+          <AnalystRatingsPanel
+            ticker={getSlotTicker(maximizedSlot)}
+            channel={slotChannels[maximizedSlot]}
+            isMaximized={true}
+            onToggleMaximize={() => (maximizedSlot = null)}
+            onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
+            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+          />
+        {:else if slotFunctions[maximizedSlot] === "COPILOT"}
+          <CopilotPanel
+            ticker={getSlotTicker(maximizedSlot)}
+            channel={slotChannels[maximizedSlot]}
+            isMaximized={true}
+            onToggleMaximize={() => (maximizedSlot = null)}
+            onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
+            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+            onExecuteCommand={(cmd) => executeCommand(cmd)}
+          />
         {/if}
       </div>
     {:else}
@@ -573,6 +601,25 @@
                 onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
                 onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
               />
+            {:else if slotFunctions[slotIdx] === "ANR"}
+              <AnalystRatingsPanel
+                ticker={getSlotTicker(slotIdx)}
+                channel={slotChannels[slotIdx]}
+                isMaximized={false}
+                onToggleMaximize={() => (maximizedSlot = slotIdx)}
+                onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
+                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+              />
+            {:else if slotFunctions[slotIdx] === "COPILOT"}
+              <CopilotPanel
+                ticker={getSlotTicker(slotIdx)}
+                channel={slotChannels[slotIdx]}
+                isMaximized={false}
+                onToggleMaximize={() => (maximizedSlot = slotIdx)}
+                onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
+                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+                onExecuteCommand={(cmd) => executeCommand(cmd)}
+              />
             {/if}
           </div>
         {/each}
@@ -618,6 +665,8 @@
                 <li><code class="text-[#FF9E00]">NVDA EDGAR &lt;GO&gt;</code> - SEC Redlines &amp; Form 4</li>
                 <li><code class="text-[#FF9E00]">NVDA NEWS &lt;GO&gt;</code> - FinBERT Headline Stream</li>
                 <li><code class="text-[#FF9E00]">NVDA HP &lt;GO&gt;</code> - Historical Return Decomp</li>
+                <li><code class="text-[#FF9E00]">NVDA ANR &lt;GO&gt;</code> - Analyst Consensus &amp; Targets</li>
+                <li><code class="text-[#FF9E00]">COPILOT &lt;GO&gt;</code> - Quantitative AI Copilot</li>
                 <li><code class="text-[#FF9E00]">GRID &lt;GO&gt;</code> or <code class="text-[#FF9E00]">ALL &lt;GO&gt;</code> - Restore 2x2</li>
               </ul>
             </div>
@@ -636,6 +685,7 @@
                 <li><strong class="text-[#00D2FF]">F9:</strong> SEC Redlines &amp; Form 4 (EDGAR)</li>
                 <li><strong class="text-[#00D2FF]">F10:</strong> FinBERT News Feed (NEWS)</li>
                 <li><strong class="text-[#00D2FF]">F11:</strong> Historical Prices (HP)</li>
+                <li><strong class="text-[#00D2FF]">F12:</strong> Quantitative AI Copilot (COPILOT)</li>
                 <li><strong class="text-[#00D2FF]">ESC:</strong> Restore Grid / Clear</li>
               </ul>
             </div>

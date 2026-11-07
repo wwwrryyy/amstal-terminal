@@ -10,6 +10,8 @@ export const STANDALONE_MNEMONICS = new Set([
   "EDGAR",
   "NEWS",
   "HP",
+  "ANR",
+  "COPILOT",
   "HELP",
   "TOP",
   "GRID",

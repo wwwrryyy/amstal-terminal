@@ -106,6 +106,30 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     expect(hpRes.result[0].intraday_return).toBeDefined();
   });
 
+  it("handles get_analyst_ratings and copilot_query JSON-RPC requests & client methods", async () => {
+    const anrRes = await ipc.executeJsonRpc("get_analyst_ratings", { ticker: "NVDA" });
+    expect(anrRes.jsonrpc).toBe("2.0");
+    expect(anrRes.result.ticker).toBe("NVDA");
+    expect(anrRes.result.consensus_rating).toBe("STRONG_BUY");
+    expect(anrRes.result.target_mean).toBeGreaterThan(0);
+
+    const directAnr = ipc.getAnalystRatings("NVDA");
+    expect(directAnr.ticker).toBe("NVDA");
+    expect(directAnr.total_analysts).toBe(48);
+
+    const copilotRes = await ipc.executeJsonRpc("copilot_query", {
+      query: "Kelly Sizing",
+      ticker: "NVDA",
+    });
+    expect(copilotRes.jsonrpc).toBe("2.0");
+    expect(copilotRes.result.answer).toBeDefined();
+    expect(copilotRes.result.sources.length).toBeGreaterThan(0);
+
+    const directCopilot = await ipc.queryCopilot("Form 4 Insider Cluster", "NVDA");
+    expect(directCopilot.answer).toContain("Form 4");
+    expect(directCopilot.suggested_commands).toContain("NVDA EDGAR <GO>");
+  });
+
   it("returns -32601 error for unknown methods", async () => {
     const res = await ipc.executeJsonRpc("unknown_method_xyz");
     expect(res.jsonrpc).toBe("2.0");

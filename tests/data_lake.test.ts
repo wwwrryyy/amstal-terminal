@@ -9,6 +9,8 @@ import {
   getEdgarFilingData,
   getNewsFeed,
   getHistoricalPrices,
+  getAnalystRatings,
+  queryCopilot,
 } from "../src/lib/data_lake";
 
 describe("Data Lake & Quantitative Signal Provider", () => {
@@ -157,5 +159,29 @@ describe("Data Lake & Quantitative Signal Provider", () => {
       expect(typeof p.intraday_return).toBe("number");
       expect(typeof p.total_return).toBe("number");
     }
+  });
+
+  it("loads Analyst Consensus & Price Targets for ANR <GO>", () => {
+    const anr = getAnalystRatings("NVDA");
+    expect(anr.ticker).toBe("NVDA");
+    expect(anr.current_price).toBeGreaterThan(0);
+    expect(anr.target_mean).toBeGreaterThan(anr.target_low);
+    expect(anr.target_high).toBeGreaterThan(anr.target_mean);
+    expect(anr.total_analysts).toBeGreaterThan(0);
+    expect(anr.ratings_breakdown.strong_buy).toBeGreaterThan(0);
+    expect(["STRONG_BUY", "BUY", "HOLD", "UNDERPERFORM", "SELL"]).toContain(anr.consensus_rating);
+    expect(anr.historical_revisions.length).toBe(4);
+  });
+
+  it("processes natural language queries with Copilot deterministic router", async () => {
+    const resKelly = await queryCopilot("What is the Kelly sizing for NVDA?", "NVDA");
+    expect(resKelly.answer).toContain("allocation");
+    expect(resKelly.sources.length).toBeGreaterThan(0);
+    expect(resKelly.suggested_commands).toContain("NVDA PORT <GO>");
+    expect(resKelly.model).toContain("copilot");
+
+    const resRegime = await queryCopilot("Current Volatility Regime", "NVDA");
+    expect(resRegime.answer.toLowerCase()).toContain("regime");
+    expect(resRegime.suggested_commands).toContain("HMM <GO>");
   });
 });

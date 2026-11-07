@@ -9,6 +9,8 @@ import {
   type EdgarFilingRedlineData,
   type NewsItemData,
   type HistoricalPriceRow,
+  type AnalystRatingsData,
+  type CopilotQueryResponse,
 } from "./types";
 import {
   createDefaultSignalFrame,
@@ -17,6 +19,8 @@ import {
   getEdgarFilingData,
   getNewsFeed,
   getHistoricalPrices,
+  getAnalystRatings,
+  queryCopilot,
   SAMPLE_TICKERS,
 } from "./data_lake";
 import { parse_mnemonic_command } from "./mnemonic";
@@ -491,6 +495,32 @@ export class IpcClientService {
         };
       }
 
+      case "get_analyst_ratings": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = getAnalystRatings(ticker);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
+      case "copilot_query": {
+        const query = params.query || "";
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = {
+          answer: `Amstal Quant Copilot analyzed your request for ${ticker}. Factor composite indicates strong momentum and robust balance sheet liquidity under Point-in-Time filtering.`,
+          sources: ["Amstal Engine Local IPC", "Security Master DB", "FactSet Consensus"],
+          suggested_commands: [`${ticker} GP <GO>`, `${ticker} PORT <GO>`, `${ticker} ANR <GO>`],
+          model: "amstal-quant-copilot-deterministic-v1.3",
+        };
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
       default:
         return {
           jsonrpc: "2.0",
@@ -552,6 +582,14 @@ export class IpcClientService {
 
   public getHistoricalPrices(ticker: string, count: number = 30): HistoricalPriceRow[] {
     return getHistoricalPrices(ticker, count);
+  }
+
+  public getAnalystRatings(ticker: string): AnalystRatingsData {
+    return getAnalystRatings(ticker);
+  }
+
+  public async queryCopilot(query: string, ticker: string = "NVDA"): Promise<CopilotQueryResponse> {
+    return queryCopilot(query, ticker);
   }
 
   public destroy(): void {

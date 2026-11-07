@@ -227,4 +227,45 @@ export interface HistoricalPriceRow {
   vwap?: number;
 }
 
+export interface AnalystRatingsData {
+  ticker: string;
+  current_price: number;
+  target_mean: number;
+  target_median: number;
+  target_high: number;
+  target_low: number;
+  upside_pct: number;
+  consensus_rating: "STRONG_BUY" | "BUY" | "HOLD" | "UNDERPERFORM" | "SELL";
+  consensus_score: number; // 1.0 - 5.0
+  total_analysts: number;
+  ratings_breakdown: {
+    strong_buy: number;
+    buy: number;
+    hold: number;
+    underperform: number;
+    sell: number;
+  };
+  historical_revisions: Array<{
+    period: string;
+    mean_target: number;
+    buy_pct: number;
+  }>;
+}
+
+export interface CopilotMessage {
+  id: string;
+  sender: "USER" | "COPILOT" | "SYSTEM";
+  timestamp_iso: string;
+  text: string;
+  sources?: string[];
+  suggested_commands?: string[];
+}
+
+export interface CopilotQueryResponse {
+  answer: string;
+  sources: string[];
+  suggested_commands: string[];
+  model: string;
+}
+
 

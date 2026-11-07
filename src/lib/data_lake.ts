@@ -5,6 +5,13 @@ import type {
   QARESignalFrame,
   MacroRegimeData,
   TickData,
+  SecurityMasterData,
+  PeerGraphData,
+  EdgarFilingRedlineData,
+  NewsItemData,
+  HistoricalPriceRow,
+  AnalystRatingsData,
+  CopilotQueryResponse,
 } from "./types";
 
 export const SAMPLE_TICKERS = ["NVDA", "AAPL", "MSFT", "CRWD", "SPY", "TSLA"];
@@ -1131,4 +1138,234 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
   }
 
   return rows;
+}
+
+export function getAnalystRatings(ticker: string): AnalystRatingsData {
+  const t = ticker.toUpperCase();
+  const basePrices: Record<string, number> = {
+    NVDA: 138.25,
+    AAPL: 224.5,
+    MSFT: 421.15,
+    CRWD: 312.4,
+    SPY: 574.8,
+    TSLA: 248.9,
+  };
+  const current_price = basePrices[t] ?? 150.0;
+
+  const dataset: Record<string, AnalystRatingsData> = {
+    NVDA: {
+      ticker: "NVDA",
+      current_price: 138.25,
+      target_mean: 172.5,
+      target_median: 170.0,
+      target_high: 200.0,
+      target_low: 125.0,
+      upside_pct: 24.8,
+      consensus_rating: "STRONG_BUY",
+      consensus_score: 4.75,
+      total_analysts: 48,
+      ratings_breakdown: {
+        strong_buy: 36,
+        buy: 9,
+        hold: 3,
+        underperform: 0,
+        sell: 0,
+      },
+      historical_revisions: [
+        { period: "Current", mean_target: 172.5, buy_pct: 93.8 },
+        { period: "1M Ago", mean_target: 165.2, buy_pct: 91.5 },
+        { period: "2M Ago", mean_target: 154.0, buy_pct: 88.0 },
+        { period: "3M Ago", mean_target: 142.5, buy_pct: 84.0 },
+      ],
+    },
+    AAPL: {
+      ticker: "AAPL",
+      current_price: 224.5,
+      target_mean: 245.0,
+      target_median: 242.0,
+      target_high: 275.0,
+      target_low: 195.0,
+      upside_pct: 9.1,
+      consensus_rating: "BUY",
+      consensus_score: 4.15,
+      total_analysts: 42,
+      ratings_breakdown: {
+        strong_buy: 22,
+        buy: 12,
+        hold: 7,
+        underperform: 1,
+        sell: 0,
+      },
+      historical_revisions: [
+        { period: "Current", mean_target: 245.0, buy_pct: 81.0 },
+        { period: "1M Ago", mean_target: 240.0, buy_pct: 79.5 },
+        { period: "2M Ago", mean_target: 232.0, buy_pct: 76.0 },
+        { period: "3M Ago", mean_target: 225.0, buy_pct: 74.0 },
+      ],
+    },
+    MSFT: {
+      ticker: "MSFT",
+      current_price: 421.15,
+      target_mean: 495.0,
+      target_median: 500.0,
+      target_high: 550.0,
+      target_low: 440.0,
+      upside_pct: 17.5,
+      consensus_rating: "STRONG_BUY",
+      consensus_score: 4.82,
+      total_analysts: 45,
+      ratings_breakdown: {
+        strong_buy: 34,
+        buy: 9,
+        hold: 2,
+        underperform: 0,
+        sell: 0,
+      },
+      historical_revisions: [
+        { period: "Current", mean_target: 495.0, buy_pct: 95.6 },
+        { period: "1M Ago", mean_target: 485.0, buy_pct: 93.3 },
+        { period: "2M Ago", mean_target: 470.0, buy_pct: 91.0 },
+        { period: "3M Ago", mean_target: 455.0, buy_pct: 89.0 },
+      ],
+    },
+    CRWD: {
+      ticker: "CRWD",
+      current_price: 312.4,
+      target_mean: 345.0,
+      target_median: 340.0,
+      target_high: 390.0,
+      target_low: 260.0,
+      upside_pct: 10.4,
+      consensus_rating: "BUY",
+      consensus_score: 4.2,
+      total_analysts: 38,
+      ratings_breakdown: {
+        strong_buy: 18,
+        buy: 14,
+        hold: 5,
+        underperform: 1,
+        sell: 0,
+      },
+      historical_revisions: [
+        { period: "Current", mean_target: 345.0, buy_pct: 84.2 },
+        { period: "1M Ago", mean_target: 338.0, buy_pct: 82.0 },
+        { period: "2M Ago", mean_target: 320.0, buy_pct: 75.0 },
+        { period: "3M Ago", mean_target: 310.0, buy_pct: 70.0 },
+      ],
+    },
+    TSLA: {
+      ticker: "TSLA",
+      current_price: 248.9,
+      target_mean: 260.0,
+      target_median: 250.0,
+      target_high: 330.0,
+      target_low: 115.0,
+      upside_pct: 4.5,
+      consensus_rating: "HOLD",
+      consensus_score: 3.25,
+      total_analysts: 35,
+      ratings_breakdown: {
+        strong_buy: 11,
+        buy: 9,
+        hold: 10,
+        underperform: 3,
+        sell: 2,
+      },
+      historical_revisions: [
+        { period: "Current", mean_target: 260.0, buy_pct: 57.1 },
+        { period: "1M Ago", mean_target: 255.0, buy_pct: 56.0 },
+        { period: "2M Ago", mean_target: 245.0, buy_pct: 52.0 },
+        { period: "3M Ago", mean_target: 230.0, buy_pct: 48.0 },
+      ],
+    },
+  };
+
+  if (dataset[t]) return dataset[t];
+
+  // Generic fallback
+  const meanTarget = +(current_price * 1.15).toFixed(2);
+  const upsidePct = +(((meanTarget - current_price) / current_price) * 100).toFixed(1);
+  return {
+    ticker: t,
+    current_price,
+    target_mean: meanTarget,
+    target_median: +(current_price * 1.14).toFixed(2),
+    target_high: +(current_price * 1.35).toFixed(2),
+    target_low: +(current_price * 0.95).toFixed(2),
+    upside_pct: upsidePct,
+    consensus_rating: "BUY",
+    consensus_score: 4.1,
+    total_analysts: 28,
+    ratings_breakdown: {
+      strong_buy: 12,
+      buy: 10,
+      hold: 5,
+      underperform: 1,
+      sell: 0,
+    },
+    historical_revisions: [
+      { period: "Current", mean_target: meanTarget, buy_pct: 78.5 },
+      { period: "1M Ago", mean_target: +(meanTarget * 0.98).toFixed(2), buy_pct: 77.0 },
+      { period: "2M Ago", mean_target: +(meanTarget * 0.95).toFixed(2), buy_pct: 74.0 },
+      { period: "3M Ago", mean_target: +(meanTarget * 0.92).toFixed(2), buy_pct: 71.0 },
+    ],
+  };
+}
+
+export async function queryCopilot(query: string, ticker: string = "NVDA"): Promise<CopilotQueryResponse> {
+  const q = query.toLowerCase();
+  const t = ticker.toUpperCase();
+
+  if (q.includes("kelly") || q.includes("size") || q.includes("allocation")) {
+    return {
+      answer: `QARE-MM v1.3 currently projects a +6.40% L1-normalized allocation for ${t} under LONG_ONLY execution mode with half-Kelly multiplier (0.50x). Expected annualized log growth rate g(f) is +14.2% after deducting 15.0 bps round-trip friction penalty.`,
+      sources: ["QARE-MM Kelly Sizer", "amstal-engine::optimizer", "PRD Section 2.4.2"],
+      suggested_commands: [`${t} PORT <GO>`, `${t} GP <GO>`],
+      model: "amstal-quant-copilot-deterministic-v1.3",
+    };
+  }
+
+  if (q.includes("regime") || q.includes("volatility") || q.includes("hmm")) {
+    return {
+      answer: `The 3-state forward-filtered Gaussian HMM macro volatility regime is currently in State 0: Low Volatility (81.2% posterior confidence). State 1 (Medium/Chop) is at 14.5% and State 2 (Crash) is at 4.3%. Macro risk sizing multiplier kappa is set to 0.85x.`,
+      sources: ["Gaussian HMM 3-State Filter", "CBOE VIX Intraday", "amstal-engine::regime"],
+      suggested_commands: ["HMM <GO>", `${t} PORT <GO>`],
+      model: "amstal-quant-copilot-deterministic-v1.3",
+    };
+  }
+
+  if (q.includes("insider") || q.includes("form 4") || q.includes("sec") || q.includes("edgar")) {
+    return {
+      answer: `Recent SEC Form 4 filings indicate high cluster buying intensity for ${t} over the last 30 days (+0.82 decayed cluster score). 10-Q Item 1A legal risk drift delta remains negative (-0.02) with 94.2% semantic similarity across consecutive quarterly disclosures.`,
+      sources: ["EDGAR Form 4 Lakehouse", "SEC 10-Q Item 1A NLP Parser", "FinBERT"],
+      suggested_commands: [`${t} EDGAR <GO>`, `${t} NEWS <GO>`],
+      model: "amstal-quant-copilot-deterministic-v1.3",
+    };
+  }
+
+  if (q.includes("peer") || q.includes("gat") || q.includes("graph") || q.includes("spillover") || q.includes("splc")) {
+    return {
+      answer: `Peer Graph Attention Network (GAT) computes high cross-momentum spillover (+0.72) from key tier-1 partners into ${t}. Network attention entropy is 1.48 with dominant lead-lag flow originating from semiconductor capital equipment and cloud infrastructure providers.`,
+      sources: ["GAT Dynamic Graph Embeddings", "S&P 500 Sub-Industry Matrix", "amstal-engine::graph"],
+      suggested_commands: [`${t} SPLC <GO>`, `${t} HP <GO>`],
+      model: "amstal-quant-copilot-deterministic-v1.3",
+    };
+  }
+
+  if (q.includes("analyst") || q.includes("rating") || q.includes("target") || q.includes("anr")) {
+    const anr = getAnalystRatings(t);
+    return {
+      answer: `Wall Street consensus for ${t} is ${anr.consensus_rating} (${anr.consensus_score.toFixed(2)}/5.0) with an average 12-month target of $${anr.target_mean.toFixed(2)} (+${anr.upside_pct}% upside from $${anr.current_price.toFixed(2)}). Total of ${anr.total_analysts} analysts covering with ${anr.ratings_breakdown.strong_buy + anr.ratings_breakdown.buy} Buy/Strong Buy ratings.`,
+      sources: ["FactSet Consensus Feeds", "Bloomberg ANR Equities", "SEC 13F Institutional"],
+      suggested_commands: [`${t} ANR <GO>`, `${t} DES <GO>`],
+      model: "amstal-quant-copilot-deterministic-v1.3",
+    };
+  }
+
+  return {
+    answer: `Amstal Quant Copilot analyzed your request for ${t}. The active quantitative factor composite shows strong residual momentum (+0.78 rank), steady overnight drift, and robust balance sheet liquidity under Point-in-Time restatement-safe filtering.`,
+    sources: ["Amstal Engine Local IPC", "Security Master DB", "QARE Signal Lakehouse"],
+    suggested_commands: [`${t} GP <GO>`, `${t} PORT <GO>`, `${t} ANR <GO>`, "HMM <GO>"],
+    model: "amstal-quant-copilot-deterministic-v1.3",
+  };
 }
