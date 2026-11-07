@@ -23,7 +23,7 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
   });
 
   it("parses standalone mnemonics: HMM <GO>, PORT <GO>, GP <GO>, FA <GO>", () => {
-    for (const m of ["HMM", "PORT", "GP", "FA", "DES", "SPLC", "GRID", "ALL", "HELP", "TOP"]) {
+    for (const m of ["HMM", "PORT", "GP", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP", "GRID", "ALL", "HELP", "TOP"]) {
       const res = parse_mnemonic_command(`${m} <GO>`);
       expect(res.is_valid).toBe(true);
       expect(res.has_go).toBe(true);
@@ -31,7 +31,7 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
     }
   });
 
-  it("parses Tier 1/2 commands: NVDA DES <GO> and CRWD SPLC <GO>", () => {
+  it("parses Tier 1/2 commands: NVDA DES <GO>, CRWD SPLC <GO>, EDGAR, NEWS, HP", () => {
     const resDes = parse_mnemonic_command("NVDA US <EQUITY> DES <GO>");
     expect(resDes.is_valid).toBe(true);
     expect(resDes.identifier).toBe("NVDA");
@@ -41,6 +41,21 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
     expect(resSplc.is_valid).toBe(true);
     expect(resSplc.identifier).toBe("CRWD");
     expect(resSplc.mnemonic).toBe("SPLC");
+
+    const resEdgar = parse_mnemonic_command("NVDA EDGAR <GO>");
+    expect(resEdgar.is_valid).toBe(true);
+    expect(resEdgar.identifier).toBe("NVDA");
+    expect(resEdgar.mnemonic).toBe("EDGAR");
+
+    const resNews = parse_mnemonic_command("AAPL NEWS <GO>");
+    expect(resNews.is_valid).toBe(true);
+    expect(resNews.identifier).toBe("AAPL");
+    expect(resNews.mnemonic).toBe("NEWS");
+
+    const resHp = parse_mnemonic_command("MSFT HP <GO>");
+    expect(resHp.is_valid).toBe(true);
+    expect(resHp.identifier).toBe("MSFT");
+    expect(resHp.mnemonic).toBe("HP");
   });
 
   it("parses commands without trailing <GO>", () => {

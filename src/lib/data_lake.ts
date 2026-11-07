@@ -894,3 +894,241 @@ export function getPeerGraph(ticker: string): import("./types").PeerGraphData {
     top_spillover_contributor: map.leadLag[0].sym,
   };
 }
+
+export function getEdgarFilingData(ticker: string): import("./types").EdgarFilingRedlineData {
+  const t = ticker.toUpperCase();
+
+  const transactionsMap: Record<string, import("./types").Form4Transaction[]> = {
+    NVDA: [
+      {
+        filing_date: "2024-09-18",
+        insider_name: "Huang Jen Hsun",
+        relationship: "President & CEO",
+        transaction_code: "S",
+        shares: 120000,
+        price: 119.5,
+        value: 14340000,
+        is_10b5_1: true,
+      },
+      {
+        filing_date: "2024-08-25",
+        insider_name: "Stevens Mark A",
+        relationship: "Director",
+        transaction_code: "P",
+        shares: 25000,
+        price: 124.8,
+        value: 3120000,
+        is_10b5_1: false,
+      },
+      {
+        filing_date: "2024-07-14",
+        insider_name: "Kress Colette",
+        relationship: "EVP & CFO",
+        transaction_code: "S",
+        shares: 66670,
+        price: 128.45,
+        value: 8563761,
+        is_10b5_1: true,
+      },
+      {
+        filing_date: "2024-06-02",
+        insider_name: "Shoquist Debora",
+        relationship: "EVP Operations",
+        transaction_code: "S",
+        shares: 41140,
+        price: 109.62,
+        value: 4509766,
+        is_10b5_1: true,
+      },
+    ],
+    CRWD: [
+      {
+        filing_date: "2024-08-12",
+        insider_name: "Kurtz George",
+        relationship: "CEO & Founder",
+        transaction_code: "P",
+        shares: 15000,
+        price: 242.1,
+        value: 3631500,
+        is_10b5_1: false,
+      },
+      {
+        filing_date: "2024-06-15",
+        insider_name: "Podbere Burt W",
+        relationship: "CFO",
+        transaction_code: "S",
+        shares: 8500,
+        price: 365.2,
+        value: 3104200,
+        is_10b5_1: true,
+      },
+    ],
+  };
+
+  const form4_transactions = transactionsMap[t] || [
+    {
+      filing_date: "2024-09-01",
+      insider_name: "Corporate Executive",
+      relationship: "Officer",
+      transaction_code: "P",
+      shares: 10000,
+      price: 135.0,
+      value: 1350000,
+      is_10b5_1: false,
+    },
+    {
+      filing_date: "2024-07-20",
+      insider_name: "Independent Director",
+      relationship: "Director",
+      transaction_code: "S",
+      shares: 15000,
+      price: 142.0,
+      value: 2130000,
+      is_10b5_1: true,
+    },
+  ];
+
+  return {
+    ticker: t,
+    item1a_similarity: 0.88,
+    mda_similarity: 0.74,
+    item1a_sentiment_drift: -0.04,
+    mda_catalyst_score: 0.28,
+    redlines: [
+      {
+        section: "Item 1A // Risk Factors",
+        status: "HIGH_CONFIDENCE_DIFF",
+        added_clauses: [
+          "Export administration regulations and heightened multilateral trade controls on high-bandwidth memory (HBM) and advanced tensor computing clusters may restrict shipments to designated geographic regions, directly impacting anticipated data center revenue trajectory.",
+          "Extreme concentration of sub-3nm extreme ultraviolet (EUV) lithography packaging capacity at single-source foundry partners increases tail vulnerability to operational interruption, regional seismic events, or geopolitical friction.",
+          "Accelerated proliferation of custom in-house hyperscale silicon architectures by primary cloud service provider customers could compress long-term gross margins.",
+        ],
+        removed_clauses: [
+          "Legacy automotive semiconductor fabrication capacity deficits experienced during fiscal 2022 and early fiscal 2023.",
+          "Cryptocurrency mining hardware demand volatility impacting entry-level consumer GPU average selling prices (ASPs).",
+        ],
+      },
+      {
+        section: "Item 7 // Management's Discussion & Analysis (MD&A)",
+        status: "CATALYST_DETECTED",
+        added_clauses: [
+          "Data Center segment revenue grew 154% year-over-year, driven by universal adoption of accelerated computing platforms across generative AI models, recommendation engines, and high-performance computing clusters.",
+          "Gross margin expanded to 75.1% primarily reflecting favorable data center mix and operating leverage against fixed silicon tape-out expenses.",
+        ],
+        removed_clauses: [
+          "Restructuring charges and inventory provisions related to prior-generation desktop graphics architectures.",
+        ],
+      },
+    ],
+    form4_transactions,
+  };
+}
+
+export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
+  const t = ticker.toUpperCase();
+
+  return [
+    {
+      headline: `${t} Unveils Next-Generation Ultra-Dense Compute Architecture with 3.2x Efficiency Gain`,
+      source: "Bloomberg Technology",
+      published_at: "2024-11-06T15:24:00Z",
+      finbert_score: 0.86,
+      sentiment_label: "BULLISH",
+      decay_half_life_days: 3.0,
+      decayed_sentiment: 0.78,
+    },
+    {
+      headline: `Hyperscale Cloud Providers Announce Multi-Billion CapEx Expansion Dedicated to ${t} Infrastructure`,
+      source: "Reuters Financial",
+      published_at: "2024-11-05T18:40:00Z",
+      finbert_score: 0.74,
+      sentiment_label: "BULLISH",
+      decay_half_life_days: 3.0,
+      decayed_sentiment: 0.58,
+    },
+    {
+      headline: `Department of Commerce Updates Regional Export Compliance Guidance for Advanced Semiconductor Foundries`,
+      source: "Wall Street Journal",
+      published_at: "2024-11-04T11:15:00Z",
+      finbert_score: -0.38,
+      sentiment_label: "BEARISH",
+      decay_half_life_days: 3.0,
+      decayed_sentiment: -0.21,
+    },
+    {
+      headline: `Consensus Options Skew Shifts Towards Out-of-the-Money Calls Ahead of Key Industry Keynote`,
+      source: "Benzinga Quant",
+      published_at: "2024-11-03T09:30:00Z",
+      finbert_score: 0.42,
+      sentiment_label: "BULLISH",
+      decay_half_life_days: 3.0,
+      decayed_sentiment: 0.18,
+    },
+    {
+      headline: `Global Tech Hardware Supply Chain Reports Normalizing Lead Times Across Sub-Component Assemblers`,
+      source: "Dow Jones Newswires",
+      published_at: "2024-11-01T14:05:00Z",
+      finbert_score: 0.15,
+      sentiment_label: "NEUTRAL",
+      decay_half_life_days: 3.0,
+      decayed_sentiment: 0.04,
+    },
+  ];
+}
+
+export function getHistoricalPrices(ticker: string, count: number = 30): import("./types").HistoricalPriceRow[] {
+  const t = ticker.toUpperCase();
+  const basePrices: Record<string, number> = {
+    NVDA: 138.25,
+    AAPL: 224.5,
+    MSFT: 421.15,
+    CRWD: 312.4,
+    SPY: 574.8,
+    TSLA: 248.9,
+  };
+  const endPrice = basePrices[t] ?? 150.0;
+  const rows: import("./types").HistoricalPriceRow[] = [];
+
+  let curPrice = endPrice;
+  const today = new Date();
+
+  for (let i = 0; i < count; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i * 1.45);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d.setDate(d.getDate() - 1);
+    }
+    const dateStr = d.toISOString().split("T")[0];
+
+    const dailyVol = curPrice * 0.022;
+    const overnightGap = (Math.random() - 0.48) * (dailyVol * 0.4);
+    const open = +(curPrice - overnightGap).toFixed(2);
+    const close = +(curPrice).toFixed(2);
+    const high = +(Math.max(open, close) + Math.random() * dailyVol * 0.5).toFixed(2);
+    const low = +(Math.min(open, close) - Math.random() * dailyVol * 0.5).toFixed(2);
+    const volume = Math.floor(18000000 + Math.random() * 32000000);
+    const vwap = +((high + low + close) / 3).toFixed(2);
+
+    const prevClose = +(open - overnightGap).toFixed(2);
+    const overnightReturn = +(((open - prevClose) / prevClose) * 100).toFixed(2);
+    const intradayReturn = +(((close - open) / open) * 100).toFixed(2);
+    const totalReturn = +(((close - prevClose) / prevClose) * 100).toFixed(2);
+
+    rows.push({
+      date: dateStr,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      overnight_return: overnightReturn,
+      intraday_return: intradayReturn,
+      total_return: totalReturn,
+      vwap,
+    });
+
+    curPrice = prevClose;
+  }
+
+  return rows;
+}

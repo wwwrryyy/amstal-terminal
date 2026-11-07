@@ -6,8 +6,19 @@ import {
   type TickData,
   type SecurityMasterData,
   type PeerGraphData,
+  type EdgarFilingRedlineData,
+  type NewsItemData,
+  type HistoricalPriceRow,
 } from "./types";
-import { createDefaultSignalFrame, getSecurityMaster, getPeerGraph, SAMPLE_TICKERS } from "./data_lake";
+import {
+  createDefaultSignalFrame,
+  getSecurityMaster,
+  getPeerGraph,
+  getEdgarFilingData,
+  getNewsFeed,
+  getHistoricalPrices,
+  SAMPLE_TICKERS,
+} from "./data_lake";
 import { parse_mnemonic_command } from "./mnemonic";
 
 export type ConnectionState = "CONNECTED" | "CONNECTING" | "SIMULATED_FALLBACK" | "DISCONNECTED";
@@ -449,6 +460,37 @@ export class IpcClientService {
         };
       }
 
+      case "get_edgar_filings": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = getEdgarFilingData(ticker);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
+      case "get_news_feed": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = getNewsFeed(ticker);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
+      case "get_historical_prices": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const count = params.count || 30;
+        const data = getHistoricalPrices(ticker, count);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
       default:
         return {
           jsonrpc: "2.0",
@@ -498,6 +540,18 @@ export class IpcClientService {
 
   public getPeerGraph(ticker: string): PeerGraphData {
     return getPeerGraph(ticker);
+  }
+
+  public getEdgarFilings(ticker: string): EdgarFilingRedlineData {
+    return getEdgarFilingData(ticker);
+  }
+
+  public getNewsFeed(ticker: string): NewsItemData[] {
+    return getNewsFeed(ticker);
+  }
+
+  public getHistoricalPrices(ticker: string, count: number = 30): HistoricalPriceRow[] {
+    return getHistoricalPrices(ticker, count);
   }
 
   public destroy(): void {

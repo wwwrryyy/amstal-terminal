@@ -6,6 +6,9 @@ import {
   createDefaultSignalFrame,
   getSecurityMaster,
   getPeerGraph,
+  getEdgarFilingData,
+  getNewsFeed,
+  getHistoricalPrices,
 } from "../src/lib/data_lake";
 
 describe("Data Lake & Quantitative Signal Provider", () => {
@@ -107,5 +110,52 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     const etf = pg.nodes.find((n) => n.role === "SECTOR_ETF");
     expect(etf).toBeDefined();
     expect(etf?.role_code).toBe(1.0);
+  });
+
+  it("extracts SEC 10-K/10-Q redlines and Form 4 insider clusters for EDGAR <GO>", () => {
+    const edgar = getEdgarFilingData("NVDA");
+    expect(edgar.ticker).toBe("NVDA");
+    expect(edgar.item1a_similarity).toBeGreaterThan(0.7);
+    expect(edgar.redlines.length).toBeGreaterThan(0);
+    expect(edgar.form4_transactions.length).toBeGreaterThan(0);
+
+    // Form 4 transactions have valid structure
+    for (const tx of edgar.form4_transactions) {
+      expect(["P", "S"]).toContain(tx.transaction_code);
+      expect(tx.shares).toBeGreaterThan(0);
+      expect(tx.price).toBeGreaterThan(0);
+      expect(typeof tx.is_10b5_1).toBe("boolean");
+    }
+  });
+
+  it("fetches FinBERT news feed with continuous exponential decay for NEWS <GO>", () => {
+    const news = getNewsFeed("NVDA");
+    expect(news.length).toBeGreaterThanOrEqual(3);
+
+    for (const item of news) {
+      expect(item.headline.length).toBeGreaterThan(15);
+      expect(item.finbert_score).toBeGreaterThanOrEqual(-1.0);
+      expect(item.finbert_score).toBeLessThanOrEqual(1.0);
+      expect(["BULLISH", "BEARISH", "NEUTRAL"]).toContain(item.sentiment_label);
+      expect(item.decay_half_life_days).toBe(3.0);
+      // Decay magnitude must not exceed raw magnitude
+      expect(Math.abs(item.decayed_sentiment)).toBeLessThanOrEqual(Math.abs(item.finbert_score) + 1e-6);
+    }
+  });
+
+  it("computes overnight vs intraday return decomposition for HP <GO>", () => {
+    const prices = getHistoricalPrices("NVDA", 20);
+    expect(prices.length).toBe(20);
+
+    for (const p of prices) {
+      expect(p.high).toBeGreaterThanOrEqual(p.open);
+      expect(p.high).toBeGreaterThanOrEqual(p.close);
+      expect(p.low).toBeLessThanOrEqual(p.open);
+      expect(p.low).toBeLessThanOrEqual(p.close);
+      expect(p.volume).toBeGreaterThan(0);
+      expect(typeof p.overnight_return).toBe("number");
+      expect(typeof p.intraday_return).toBe("number");
+      expect(typeof p.total_return).toBe("number");
+    }
   });
 });

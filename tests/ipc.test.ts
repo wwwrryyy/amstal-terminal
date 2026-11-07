@@ -85,6 +85,27 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     expect(pgRes.result.nodes.length).toBe(10);
   });
 
+  it("handles get_edgar_filings, get_news_feed, and get_historical_prices JSON-RPC requests", async () => {
+    const edgarRes = await ipc.executeJsonRpc("get_edgar_filings", { ticker: "NVDA" });
+    expect(edgarRes.jsonrpc).toBe("2.0");
+    expect(edgarRes.result.ticker).toBe("NVDA");
+    expect(edgarRes.result.redlines.length).toBeGreaterThan(0);
+    expect(edgarRes.result.form4_transactions.length).toBeGreaterThan(0);
+
+    const newsRes = await ipc.executeJsonRpc("get_news_feed", { ticker: "NVDA" });
+    expect(newsRes.jsonrpc).toBe("2.0");
+    expect(Array.isArray(newsRes.result)).toBe(true);
+    expect(newsRes.result.length).toBeGreaterThan(0);
+    expect(newsRes.result[0].finbert_score).toBeDefined();
+
+    const hpRes = await ipc.executeJsonRpc("get_historical_prices", { ticker: "NVDA", count: 15 });
+    expect(hpRes.jsonrpc).toBe("2.0");
+    expect(Array.isArray(hpRes.result)).toBe(true);
+    expect(hpRes.result.length).toBe(15);
+    expect(hpRes.result[0].overnight_return).toBeDefined();
+    expect(hpRes.result[0].intraday_return).toBeDefined();
+  });
+
   it("returns -32601 error for unknown methods", async () => {
     const res = await ipc.executeJsonRpc("unknown_method_xyz");
     expect(res.jsonrpc).toBe("2.0");

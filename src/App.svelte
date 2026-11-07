@@ -6,11 +6,14 @@
   import FinancialAnalysisPanel from "./components/FinancialAnalysisPanel.svelte";
   import SecurityMasterPanel from "./components/SecurityMasterPanel.svelte";
   import PeerGraphPanel from "./components/PeerGraphPanel.svelte";
+  import EdgarRedlinePanel from "./components/EdgarRedlinePanel.svelte";
+  import NewsSentimentPanel from "./components/NewsSentimentPanel.svelte";
+  import HistoricalPricePanel from "./components/HistoricalPricePanel.svelte";
   import { ipcService, type ConnectionState } from "./lib/ipc";
   import { parse_mnemonic_command, STANDALONE_MNEMONICS } from "./lib/mnemonic";
   import type { ColorChannel, MacroRegimeData, QARESignalFrame, TickData } from "./lib/types";
 
-  type FunctionMnemonic = "GP" | "PORT" | "HMM" | "FA" | "DES" | "SPLC";
+  type FunctionMnemonic = "GP" | "PORT" | "HMM" | "FA" | "DES" | "SPLC" | "EDGAR" | "NEWS" | "HP";
 
   // Reactive Multi-Panel Workstation State
   let omnibarInput = $state("NVDA US <EQUITY> GP <GO>");
@@ -144,7 +147,7 @@
 
     // Mnemonic Action
     const m = parsed.mnemonic.toUpperCase();
-    if (["GP", "PORT", "HMM", "FA", "DES", "SPLC"].includes(m)) {
+    if (["GP", "PORT", "HMM", "FA", "DES", "SPLC", "EDGAR", "NEWS", "HP"].includes(m)) {
       slotFunctions[focusedSlot] = m as FunctionMnemonic;
     } else if (m === "GRID" || m === "ALL") {
       maximizedSlot = null;
@@ -201,6 +204,18 @@
       e.preventDefault();
       slotFunctions[focusedSlot] = "SPLC";
       omnibarInput = `${getSlotTicker(focusedSlot)} SPLC <GO>`;
+    } else if (e.key === "F9") {
+      e.preventDefault();
+      slotFunctions[focusedSlot] = "EDGAR";
+      omnibarInput = `${getSlotTicker(focusedSlot)} EDGAR <GO>`;
+    } else if (e.key === "F10") {
+      e.preventDefault();
+      slotFunctions[focusedSlot] = "NEWS";
+      omnibarInput = `${getSlotTicker(focusedSlot)} NEWS <GO>`;
+    } else if (e.key === "F11") {
+      e.preventDefault();
+      slotFunctions[focusedSlot] = "HP";
+      omnibarInput = `${getSlotTicker(focusedSlot)} HP <GO>`;
     } else if (e.key === "Escape") {
       if (showHelpModal) {
         showHelpModal = false;
@@ -364,6 +379,15 @@
       <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} SPLC <GO>`)}>
         <strong class="text-[#00D2FF]">F8</strong> SPLC &lt;PEER GRAPH&gt;
       </button>
+      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} EDGAR <GO>`)}>
+        <strong class="text-[#FF9E00]">F9</strong> EDGAR &lt;REDLINES&gt;
+      </button>
+      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} NEWS <GO>`)}>
+        <strong class="text-[#00E676]">F10</strong> NEWS &lt;FINBERT&gt;
+      </button>
+      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} HP <GO>`)}>
+        <strong class="text-[#00D2FF]">F11</strong> HP &lt;PRICES&gt;
+      </button>
     </div>
 
     <div class="flex items-center gap-2">
@@ -428,6 +452,33 @@
             onToggleMaximize={() => (maximizedSlot = null)}
             onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
             onSelectTicker={(t) => setSlotTicker(maximizedSlot!, t)}
+            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+          />
+        {:else if slotFunctions[maximizedSlot] === "EDGAR"}
+          <EdgarRedlinePanel
+            ticker={getSlotTicker(maximizedSlot)}
+            channel={slotChannels[maximizedSlot]}
+            isMaximized={true}
+            onToggleMaximize={() => (maximizedSlot = null)}
+            onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
+            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+          />
+        {:else if slotFunctions[maximizedSlot] === "NEWS"}
+          <NewsSentimentPanel
+            ticker={getSlotTicker(maximizedSlot)}
+            channel={slotChannels[maximizedSlot]}
+            isMaximized={true}
+            onToggleMaximize={() => (maximizedSlot = null)}
+            onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
+            onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
+          />
+        {:else if slotFunctions[maximizedSlot] === "HP"}
+          <HistoricalPricePanel
+            ticker={getSlotTicker(maximizedSlot)}
+            channel={slotChannels[maximizedSlot]}
+            isMaximized={true}
+            onToggleMaximize={() => (maximizedSlot = null)}
+            onChannelChange={(ch) => (slotChannels[maximizedSlot!] = ch)}
             onSwitchFunction={(fn) => (slotFunctions[maximizedSlot!] = fn as FunctionMnemonic)}
           />
         {/if}
@@ -495,6 +546,33 @@
                 onSelectTicker={(t) => setSlotTicker(slotIdx, t)}
                 onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
               />
+            {:else if slotFunctions[slotIdx] === "EDGAR"}
+              <EdgarRedlinePanel
+                ticker={getSlotTicker(slotIdx)}
+                channel={slotChannels[slotIdx]}
+                isMaximized={false}
+                onToggleMaximize={() => (maximizedSlot = slotIdx)}
+                onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
+                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+              />
+            {:else if slotFunctions[slotIdx] === "NEWS"}
+              <NewsSentimentPanel
+                ticker={getSlotTicker(slotIdx)}
+                channel={slotChannels[slotIdx]}
+                isMaximized={false}
+                onToggleMaximize={() => (maximizedSlot = slotIdx)}
+                onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
+                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+              />
+            {:else if slotFunctions[slotIdx] === "HP"}
+              <HistoricalPricePanel
+                ticker={getSlotTicker(slotIdx)}
+                channel={slotChannels[slotIdx]}
+                isMaximized={false}
+                onToggleMaximize={() => (maximizedSlot = slotIdx)}
+                onChannelChange={(ch) => (slotChannels[slotIdx] = ch)}
+                onSwitchFunction={(fn) => (slotFunctions[slotIdx] = fn as FunctionMnemonic)}
+              />
             {/if}
           </div>
         {/each}
@@ -537,6 +615,9 @@
                 <li><code class="text-[#FF9E00]">AAPL FA &lt;GO&gt;</code> - 10Y XBRL Lakehouse</li>
                 <li><code class="text-[#FF9E00]">NVDA DES &lt;GO&gt;</code> - Security Master Profile</li>
                 <li><code class="text-[#FF9E00]">NVDA SPLC &lt;GO&gt;</code> - 10-Node Dynamic Peer GAT</li>
+                <li><code class="text-[#FF9E00]">NVDA EDGAR &lt;GO&gt;</code> - SEC Redlines &amp; Form 4</li>
+                <li><code class="text-[#FF9E00]">NVDA NEWS &lt;GO&gt;</code> - FinBERT Headline Stream</li>
+                <li><code class="text-[#FF9E00]">NVDA HP &lt;GO&gt;</code> - Historical Return Decomp</li>
                 <li><code class="text-[#FF9E00]">GRID &lt;GO&gt;</code> or <code class="text-[#FF9E00]">ALL &lt;GO&gt;</code> - Restore 2x2</li>
               </ul>
             </div>
@@ -552,6 +633,9 @@
                 <li><strong class="text-[#00D2FF]">F6:</strong> Restore 2x2 Grid</li>
                 <li><strong class="text-[#00D2FF]">F7:</strong> Security Master (DES)</li>
                 <li><strong class="text-[#00D2FF]">F8:</strong> Dynamic Peer Graph (SPLC)</li>
+                <li><strong class="text-[#00D2FF]">F9:</strong> SEC Redlines &amp; Form 4 (EDGAR)</li>
+                <li><strong class="text-[#00D2FF]">F10:</strong> FinBERT News Feed (NEWS)</li>
+                <li><strong class="text-[#00D2FF]">F11:</strong> Historical Prices (HP)</li>
                 <li><strong class="text-[#00D2FF]">ESC:</strong> Restore Grid / Clear</li>
               </ul>
             </div>

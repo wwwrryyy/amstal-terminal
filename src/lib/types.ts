@@ -176,3 +176,55 @@ export interface PeerGraphData {
   top_spillover_contributor?: string;
 }
 
+export interface Form4Transaction {
+  filing_date: string;
+  insider_name: string;
+  relationship: string;
+  transaction_code: string;
+  shares: number;
+  price: number;
+  value: number;
+  is_10b5_1: boolean;
+}
+
+export interface RedlineClauseDiff {
+  section: string;
+  status: string;
+  added_clauses: string[];
+  removed_clauses: string[];
+}
+
+export interface EdgarFilingRedlineData {
+  ticker: string;
+  item1a_similarity: number;
+  mda_similarity: number;
+  item1a_sentiment_drift: number;
+  mda_catalyst_score: number;
+  redlines: RedlineClauseDiff[];
+  form4_transactions: Form4Transaction[];
+}
+
+export interface NewsItemData {
+  headline: string;
+  source: string;
+  published_at: string;
+  finbert_score: number;
+  sentiment_label: "BULLISH" | "BEARISH" | "NEUTRAL";
+  decay_half_life_days: number;
+  decayed_sentiment: number;
+}
+
+export interface HistoricalPriceRow {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  overnight_return: number;
+  intraday_return: number;
+  total_return: number;
+  vwap?: number;
+}
+
+
