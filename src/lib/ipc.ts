@@ -74,11 +74,11 @@ export class IpcClientService {
       medium_volatility: 0.145,
       high_volatility: 0.043,
     },
-    kappa: 0.85,
+    kappa: 0.80,
     transition_matrix: [
-      [0.942, 0.051, 0.007],
-      [0.082, 0.871, 0.047],
-      [0.012, 0.138, 0.85],
+      [0.898, 0.096, 0.006],
+      [0.185, 0.766, 0.049],
+      [0.012, 0.321, 0.667],
     ],
   };
 
@@ -124,6 +124,15 @@ export class IpcClientService {
     }
   }
 
+  public isMarketSessionOpen(d: Date = new Date()): boolean {
+    const day = d.getUTCDay();
+    // 0 = Sunday, 6 = Saturday -> Exchange Closed
+    if (day === 0 || day === 6) return false;
+    const utcHours = d.getUTCHours() + d.getUTCMinutes() / 60;
+    // 9:30 AM to 4:00 PM US Eastern is approx 13:30 to 21:00 UTC
+    return utcHours >= 13.5 && utcHours <= 21.0;
+  }
+
   public subscribe(callback: (frame: ConflatedStreamFrame) => void): () => void {
     this.listeners.add(callback);
     return () => this.listeners.delete(callback);
@@ -159,6 +168,7 @@ export class IpcClientService {
         this.setStatus("CONNECTED");
         this.stopSimulation();
         this.sendPing();
+        this.hydrateFromLiveEngine();
       };
 
       this.ws.onmessage = (event) => {
@@ -269,7 +279,10 @@ export class IpcClientService {
       const currentTick = this.ticks.get(ticker);
       if (!currentTick) continue;
 
-      const delta = (Math.random() - 0.495) * (currentTick.price * 0.0006);
+      // On weekends or outside trading sessions, quotes freeze at Friday's closing print
+      const delta = this.isMarketSessionOpen()
+        ? (Math.random() - 0.495) * (currentTick.price * 0.0006)
+        : 0;
       const newPrice = +(currentTick.price + delta).toFixed(2);
       const change = +(currentTick.change + delta).toFixed(2);
       const changePct = +((change / (newPrice - change)) * 100).toFixed(2);
@@ -343,6 +356,35 @@ export class IpcClientService {
 
     for (const listener of this.listeners) {
       listener(conflatedFrame);
+    }
+  }
+
+  private async hydrateFromLiveEngine(): Promise<void> {
+    try {
+      const regRes = await this.executeJsonRpc<MacroRegimeData>("get_macro_regime");
+      if (regRes.result) {
+        this.macroRegime = regRes.result;
+      }
+      const sigUpdates: Record<string, QARESignalFrame> = {};
+      for (const sym of ["NVDA", "MSFT", "AAPL", "CRWD"]) {
+        const sigRes = await this.executeJsonRpc<QARESignalFrame>("get_signal", { ticker: sym });
+        if (sigRes.result && sigRes.result.execution_recommendation) {
+          this.signals.set(sym, sigRes.result);
+          sigUpdates[sym] = sigRes.result;
+        }
+      }
+      const frame: ConflatedStreamFrame = {
+        type: "CONFLATED_STREAM_FRAME",
+        conflation_interval_ms: 100,
+        timestamp_ms: Date.now(),
+        signals: sigUpdates,
+        macro_regime: this.macroRegime,
+      };
+      for (const listener of this.listeners) {
+        listener(frame);
+      }
+    } catch {
+      // fallback silently if initial hydration fails
     }
   }
 

@@ -190,11 +190,18 @@
             {@const isSelected = selectedNodeId === node.id}
             {@const radius = isTarget ? 22 : 16}
 
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <g
               onclick={() => handleNodeClick(node.id)}
-              class="cursor-pointer transition-transform hover:scale-110"
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleNodeClick(node.id);
+                }
+              }}
+              role="button"
+              tabindex="0"
+              aria-label={`Inspect ${node.label} (${node.role})`}
+              class="cursor-pointer transition-transform hover:scale-110 focus:outline-none"
             >
               <!-- Outer halo ring on selected -->
               {#if isSelected}

@@ -37,8 +37,28 @@ body {
 }
 
 /* Tabular figures for all telemetry numbers */
-.num, data, td, [data-tabular] {
+.num, data, td, .font-mono, [data-tabular] {
   font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.text-2xs {
+  font-size: 0.6875rem; /* 11px */
+  line-height: 0.95rem;
+}
+
+.text-3xs {
+  font-size: 0.5625rem; /* 9px */
+  line-height: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Subtle Aerospace CRT Scanline Texture */

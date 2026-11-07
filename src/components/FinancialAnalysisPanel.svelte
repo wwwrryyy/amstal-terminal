@@ -149,7 +149,7 @@
   </div>
 
   <!-- Table Container -->
-  <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto bg-[#06090F]">
+  <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto bg-[#06090F] custom-scrollbar">
     <table class="w-max min-w-full text-2xs border-collapse font-mono select-text">
       <!-- Period / SEC EDGAR Headers -->
       <thead>
@@ -158,11 +158,11 @@
             FINANCIAL METRIC
           </th>
           {#each lakehouse.filings as f}
-            <th class="px-3 py-1.5 text-right min-w-[85px] border-r border-[#172033]/40">
+            <th class="px-2.5 py-1.5 text-right min-w-[76px] border-r border-[#172033]/40">
               <div class="font-bold text-[#E6EDF5]">{f.period}</div>
               <button
                 onclick={() => (selectedFiling = f)}
-                class="text-3xs text-[#7A8B9E] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[85px] ml-auto text-right"
+                class="text-3xs text-[#7A8B9E] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[76px] ml-auto text-right"
                 title={`Click for EDGAR Filing Metadata\nFiled: ${f.filed_date}\nPeriod End: ${f.period_end_date}\nAccession: ${f.accession_number}`}
               >
                 10-K • {f.filed_date.slice(2, 7)}
@@ -182,7 +182,7 @@
             </td>
             {#each lakehouse.filings as f}
               {@const val = row.values[f.period]}
-              <td class="px-3 py-1.5 text-right font-mono border-r border-[#172033]/30 {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
+              <td class="px-2.5 py-1.5 text-right font-mono border-r border-[#172033]/30 {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
                 {formatValue(val, row.format)}
               </td>
             {/each}
@@ -196,11 +196,23 @@
   <div class="px-3 py-1.5 bg-[#090D16] border-t border-[#172033] flex items-center justify-between text-2xs font-mono">
     <div class="flex items-center gap-3">
       <span class="text-[#5E6D82]">
-        XBRL AUDIT: <strong class="text-[#00FF66]">US-GAAP 2024 CERTIFIED</strong>
+        XBRL AUDIT: <strong class="text-[#00FF66]">US-GAAP 2026 CERTIFIED</strong>
       </span>
       <span class="text-[#5E6D82]">|</span>
       <span class="text-[#5E6D82]">
-        10Y REVENUE CAGR: <strong class="text-[#E6EDF5]">{ticker === 'AAPL' ? '+6.8%' : ticker === 'NVDA' ? '+33.1%' : '+11.3%'}</strong>
+        10Y REVENUE CAGR: <strong class="text-[#E6EDF5]">
+          {(() => {
+            const revRow = lakehouse.incomeStatement.find((r) => r.tag === "Revenues");
+            const rEnd = revRow?.values["FY2026"];
+            const rStart = revRow?.values["FY2016"] ?? revRow?.values["FY2017"];
+            if (rEnd && rStart && rStart > 0) {
+              const years = revRow?.values["FY2016"] ? 10 : 9;
+              const cagr = (Math.pow(rEnd / rStart, 1 / years) - 1) * 100;
+              return `${cagr >= 0 ? "+" : ""}${cagr.toFixed(1)}%`;
+            }
+            return "+13.3%";
+          })()}
+        </strong>
       </span>
       <span class="text-[#5E6D82]">|</span>
       <span class="text-[#5E6D82]">
@@ -244,5 +256,20 @@
   .text-3xs {
     font-size: 0.5625rem; /* 9px */
     line-height: 0.75rem;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #06090F;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #172033;
+    border-radius: 2px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #00D2FF;
   }
 </style>

@@ -277,12 +277,26 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     const cost = msft.incomeStatement.find((r) => r.tag === "CostOfRevenue")!;
     const gp = msft.incomeStatement.find((r) => r.tag === "GrossProfit")!;
 
-    expect(rev.values["FY2026"]).toBe(318000);
-    expect(cost.values["FY2026"]).toBe(96000);
-    expect(gp.values["FY2026"]).toBe(222000); // 318,000 - 96,000 = 222,000
+    expect(rev.values["FY2026"]).toBe(318420);
+    expect(cost.values["FY2026"]).toBe(96180);
+    expect(gp.values["FY2026"]).toBe(222240); // 318,420 - 96,180 = 222,240
 
-    expect(rev.values["FY2025"]).toBe(279000);
-    expect(cost.values["FY2025"]).toBe(84000);
-    expect(gp.values["FY2025"]).toBe(195000); // 279,000 - 84,000 = 195,000
+    expect(rev.values["FY2025"]).toBe(281724);
+    expect(cost.values["FY2025"]).toBe(85820);
+    expect(gp.values["FY2025"]).toBe(195904); // 281,724 - 85,820 = 195,904
+  });
+
+  it("ensures historical prices have unique dates and independent overnight/intraday returns", () => {
+    const rows = getHistoricalPrices("NVDA", 20);
+    const dates = rows.map((r) => r.date);
+    expect(new Set(dates).size).toBe(20);
+    const identicalCount = rows.filter((r) => r.overnight_return === r.intraday_return).length;
+    expect(identicalCount).toBeLessThan(3);
+  });
+
+  it("ensures Peer GAT edge attention weights sum to 1.000", () => {
+    const pg = getPeerGraph("NVDA");
+    const sum = pg.edges.reduce((acc, e) => acc + e.attention_weight, 0);
+    expect(sum).toBeCloseTo(1.0, 2);
   });
 });

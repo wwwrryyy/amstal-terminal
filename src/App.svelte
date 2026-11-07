@@ -61,6 +61,7 @@
   // Modals & Popovers
   let showHelpModal = $state(false);
   let systemTimeUtc = $state("");
+  let marketOpen = $state(ipcService.isMarketSessionOpen());
 
   let unsubscribeIpc: (() => void) | null = null;
   let unsubscribeStatus: (() => void) | null = null;
@@ -68,6 +69,7 @@
 
   function updateClock() {
     const now = new Date();
+    marketOpen = ipcService.isMarketSessionOpen(now);
     systemTimeUtc = now.toISOString().replace("T", " ").substring(0, 19) + " UTC";
   }
 
@@ -295,9 +297,14 @@
       <span class="text-xs font-semibold tracking-wider text-[#FFB000]">Amstal</span>
 
       <!-- Telemetry Status Beacon -->
-      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#06090F] border border-[#172033] text-3xs">
+      <div
+        class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#06090F] border border-[#172033] text-3xs"
+        title={!marketOpen ? "US Equity Session: CLOSED (Weekend / After-hours: quotes frozen at Friday closing print)" : "US Equity Session: OPEN (Streaming continuous real-time quotes)"}
+      >
         <span
-          class="w-1.5 h-1.5 rounded-full {connectionState === 'CONNECTED'
+          class="w-1.5 h-1.5 rounded-full {!marketOpen && connectionState === 'CONNECTED'
+            ? 'bg-[#8B98A5]'
+            : connectionState === 'CONNECTED'
             ? 'bg-[#00FF66] shadow-[0_0_6px_#00FF66]'
             : connectionState === 'SIMULATED_FALLBACK'
               ? 'bg-[#00D2FF]'
@@ -307,9 +314,9 @@
         ></span>
         <span class="font-medium text-[#8B98A5]">
           {connectionState === "CONNECTED"
-            ? "LIVE"
+            ? (marketOpen ? "LIVE" : "CLOSED")
             : connectionState === "SIMULATED_FALLBACK"
-              ? "SIM"
+              ? (marketOpen ? "SIM" : "SIM [CLOSED]")
               : connectionState === "CONNECTING"
                 ? "SYNC"
                 : "OFFLINE"}
@@ -327,8 +334,10 @@
           type="text"
           bind:value={omnibarInput}
           onkeydown={handleInputKeydown}
+          aria-label="Bloomberg RPN Command Omnibar"
+          autocomplete="off"
           class="w-full pl-7 pr-14 py-1 text-xs bg-[#06090F] border border-[#172033] rounded text-[#FFB000] font-mono tracking-wide focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/50 placeholder:text-[#3B4758]"
-          placeholder="COMMAND <GO> (e.g. NVDA GP <GO>)"
+          placeholder="COMMAND <GO> (e.g. NVDA GP <GO>)…"
           spellcheck="false"
         />
         <div class="absolute right-1 flex items-center gap-1">
@@ -351,6 +360,11 @@
         <span class="font-mono {activeTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
           {activeTick.change >= 0 ? "+" : ""}{activeTick.change_pct.toFixed(2)}%
         </span>
+        {#if !marketOpen}
+          <span class="text-3xs text-[#7A8B9E] font-bold px-1 bg-[#151D2E] rounded border border-[#23314B]" title="Official Friday closing bell session">
+            CLOSED
+          </span>
+        {/if}
       </div>
 
       <!-- Regime Pill with explicit Posterior Probability Label -->
@@ -372,6 +386,7 @@
       <button
         type="button"
         onclick={() => (showHelpModal = true)}
+        aria-label="Open Workstation Guide (F1)"
         class="px-1.5 py-0.5 text-3xs font-mono text-[#8B98A5] hover:text-[#E2E8F0] rounded border border-[#172033] hover:border-[#8B98A5] transition-colors cursor-pointer"
         title="Press F1 for Workstation Guide"
       >
@@ -490,10 +505,16 @@
       <div class="h-full w-full grid grid-cols-2 grid-rows-2 gap-1">
         {#each [0, 1, 2, 3] as slotIdx}
           <!-- Slot Container with Focus Border -->
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <div
             onclick={() => (focusedSlot = slotIdx)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                focusedSlot = slotIdx;
+              }
+            }}
+            role="region"
+            aria-label={`Workstation Panel Slot ${slotIdx + 1}`}
             class="min-h-0 min-w-0 h-full rounded transition-all {focusedSlot === slotIdx ? 'ring-1 ring-[#FFB000]/70 border border-[#FFB000]/40' : 'border border-[#172033]'}"
           >
             {#if slotFunctions[slotIdx] === "GP"}
@@ -619,7 +640,7 @@
 
     <!-- Center: Telemetry Status -->
     <div class="hidden md:flex items-center gap-3 font-mono">
-      <span>FEED: <strong class="text-[#00FF66]">250ms CONFLATION</strong></span>
+      <span>FEED: <strong class="text-[#00FF66]">{connectionState === "CONNECTED" ? "100ms CONFLATION" : "250ms CONFLATION"}</strong></span>
       <span class="text-[#232F48]">|</span>
       <span>IPC: <strong class="text-[#8B98A5]">/tmp/amstal.sock</strong></span>
       <span class="text-[#232F48]">|</span>
@@ -645,6 +666,7 @@
           </div>
           <button
             onclick={() => (showHelpModal = false)}
+            aria-label="Close Workstation Guide"
             class="text-[#5E6D82] hover:text-white font-bold text-sm px-2 cursor-pointer"
           >
             &times;

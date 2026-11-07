@@ -69,13 +69,19 @@
   // Derived Kelly calculations
   let unconstrainedKelly = $derived(signal.execution_recommendation.unconstrained_kelly_pct || 0);
   let l1NormBase = $derived(signal.execution_recommendation.l1_normalized_portfolio_allocation_pct || 0);
-  // Synchronized with HMM dynamic multiplier
-  let kappa = $derived(signal.macro_regime.kappa ?? 0.80);
+  // Synchronized with HMM dynamic multiplier formula: 0.85 * (1 - 0.80 * P(S_2)) * (1 - 0.20 * P(S_1))
+  let kappa = $derived.by(() => {
+    const fp = signal.macro_regime?.filtered_probabilities;
+    if (fp) {
+      return +(0.85 * (1 - 0.80 * (fp.high_volatility ?? 0.043)) * (1 - 0.20 * (fp.medium_volatility ?? 0.145))).toFixed(2);
+    }
+    return signal.macro_regime?.kappa ?? 0.80;
+  });
   let isBuyAction = $derived(signal.execution_recommendation.action === "BUY");
 
   // Scaled portfolio weight: base * (kellyMultiplier / 0.5) * kappa (strictly 0.00% if HOLD/SELL in LONG_ONLY)
   let finalAllocPct = $derived(
-    isBuyAction ? +(l1NormBase * (kellyMultiplier / 0.5) * (kappa / 0.85)).toFixed(2) : 0.0
+    isBuyAction ? +(l1NormBase * (kellyMultiplier / 0.5) * (kappa / 0.80)).toFixed(2) : 0.0
   );
 
   // Clear execution rationale explaining why action is BUY, SELL, or HOLD
@@ -100,24 +106,20 @@
   let tradesPerYear = $derived(252 / horizonDays);
 
   let expectedPortfolioGrowth = $derived.by(() => {
-    const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
-    const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
-    const f = Math.max(0.01, finalAllocPct / 100);
-    const rWin = 0.07; // 7% win target
-    const rLoss = 0.035; // 3.5% loss stop
-    const friction = (signal.execution_recommendation.estimated_round_trip_cost_bps || 15) / 10000;
-
-    const termBuy = pBuy * Math.log(Math.max(0.001, 1 + f * rWin));
-    const termSell = pSell * Math.log(Math.max(0.001, 1 - f * rLoss));
-    const g = (termBuy + termSell - friction) * tradesPerYear * 100;
-    return Math.max(0, g).toFixed(2);
+    if (!isBuyAction || finalAllocPct <= 0) return "0.00";
+    const sleeveVal = parseFloat(expectedSleeveGrowth);
+    const portGrowth = (finalAllocPct / 100) * sleeveVal;
+    return Math.max(0, portGrowth).toFixed(2);
   });
 
   let expectedSleeveGrowth = $derived.by(() => {
     const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
     const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
-    const rWin = 0.07;
-    const rLoss = 0.035;
+    const entry = signal.execution_recommendation.entry_price || 100;
+    const tp = signal.execution_recommendation.dynamic_take_profit || entry * 1.07;
+    const sl = signal.execution_recommendation.dynamic_stop_loss || entry * 0.965;
+    const rWin = Math.max(0.01, (tp - entry) / entry);
+    const rLoss = Math.max(0.005, (entry - sl) / entry);
     const friction = (signal.execution_recommendation.estimated_round_trip_cost_bps || 15) / 10000;
 
     const sleeveBuy = pBuy * Math.log(1 + rWin);
@@ -142,18 +144,6 @@
     smart_money_divergence_pos: { label: "Smart Money Div (+) Pos", group: "Network & Alternative", min: -1, max: 1 },
     smart_money_divergence_neg: { label: "Smart Money Div (-) Neg", group: "Network & Alternative", min: -1, max: 1 },
   };
-
-  function getBarWidth(val: number, min: number, max: number): { width: string; isPositive: boolean } {
-    if (min < 0) {
-      // Range -1 to 1: center at 50%
-      const pct = Math.min(100, Math.abs(val) * 100);
-      return { width: `${pct}%`, isPositive: val >= 0 };
-    } else {
-      // Range 0 to 1
-      const pct = Math.min(100, Math.max(0, val * 100));
-      return { width: `${pct}%`, isPositive: true };
-    }
-  }
 </script>
 
 <div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden">
@@ -297,7 +287,7 @@
         <span class="w-1/4 pl-4">NORMALIZED RANK / DISPERSION</span>
       </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-8">
+      <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-2 custom-scrollbar">
         {#each Object.entries(signal.signal_breakdown) as [key, val]}
           {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
           <div class="flex items-center justify-between px-3 py-[3px] text-2xs hover:bg-[#0C111B] transition-colors">
@@ -342,5 +332,19 @@
   .text-2xs {
     font-size: 0.6875rem; /* 11px */
     line-height: 0.95rem;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #06090F;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #23314B;
+    border-radius: 2px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #00D2FF;
   }
 </style>

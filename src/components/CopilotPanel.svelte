@@ -249,9 +249,9 @@
     {/each}
 
     {#if isThinking}
-      <div class="flex items-center gap-2 text-2xs text-[#00D2FF] py-2 animate-pulse">
+      <div role="status" aria-live="polite" class="flex items-center gap-2 text-2xs text-[#00D2FF] py-2 animate-pulse">
         <span class="w-1.5 h-1.5 rounded-full bg-[#00D2FF]"></span>
-        <span>Evaluating quantitative heuristics & local semantics...</span>
+        <span>Evaluating quantitative heuristics &amp; local semantics…</span>
       </div>
     {/if}
   </div>
@@ -265,7 +265,9 @@
       <input
         type="text"
         bind:value={inputQuery}
-        placeholder="ASK QUANT QUESTION (e.g., NVDA Kelly Sizing)..."
+        aria-label="Ask Amstal Quant Copilot"
+        autocomplete="off"
+        placeholder="ASK QUANT QUESTION (e.g., NVDA Kelly Sizing)…"
         class="w-full pl-24 pr-16 py-1.5 text-xs bg-[#06090F] border border-[#172033] rounded text-[#E6EDF5] placeholder-[#3B4758] focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/40 transition-all font-mono"
       />
       <button

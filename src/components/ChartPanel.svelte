@@ -74,9 +74,11 @@
   // Active signal & tick
   let currentSignal = $state<QARESignalFrame>(ipcService.getSignal("NVDA"));
   let currentTick = $state<TickData>(ipcService.getTick("NVDA"));
+  let connState = $state<string>(ipcService.connectionState);
 
   let resizeObserver: ResizeObserver | null = null;
   let unsubscribeIpc: (() => void) | null = null;
+  let unsubscribeStatus: (() => void) | null = null;
   let bars: OHLCVBar[] = [];
 
   function initChart() {
@@ -123,8 +125,10 @@
       },
       rightPriceScale: {
         borderColor: "#172033",
+        entireTextOnly: true,
+        ticksVisible: true,
         scaleMargins: {
-          top: 0.12,
+          top: 0.14,
           bottom: 0.22,
         },
       },
@@ -417,6 +421,10 @@
         }
       }
     });
+
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
   });
 
   onDestroy(() => {
@@ -425,6 +433,7 @@
       rafId = null;
     }
     if (unsubscribeIpc) unsubscribeIpc();
+    if (unsubscribeStatus) unsubscribeStatus();
     if (resizeObserver) resizeObserver.disconnect();
     if (chart) {
       chart.remove();
@@ -570,7 +579,7 @@
       </div>
     {:else}
       <div class="text-[#5E6D82] text-3xs whitespace-nowrap hidden sm:block">
-        250ms CONFLATION &bull; TRIPLE BARRIER METHOD
+        {connState === "CONNECTED" ? "100ms CONFLATION" : "250ms CONFLATION"} &bull; TRIPLE BARRIER METHOD
       </div>
     {/if}
   </div>

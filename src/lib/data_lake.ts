@@ -127,11 +127,11 @@ export function createDefaultSignalFrame(ticker: string, priceOverride?: number)
         medium_volatility: 0.145,
         high_volatility: 0.043,
       },
-      kappa: 0.85,
+      kappa: 0.80,
       transition_matrix: [
-        [0.942, 0.051, 0.007],
-        [0.082, 0.871, 0.047],
-        [0.012, 0.138, 0.85],
+        [0.898, 0.096, 0.006],
+        [0.185, 0.766, 0.049],
+        [0.012, 0.321, 0.667],
       ],
     },
     signal_breakdown: signals,
@@ -203,19 +203,20 @@ export function generateHistoricalCandles(ticker: string, count: number = 90): O
     curDate.setDate(curDate.getDate() + 1);
   }
 
-  // Ensure last bar close matches endPrice
+  // Ensure last bar (T_0) reflects current session (+0.09% green body, wicks cleanly within TP/SL barriers)
   if (bars.length > 0) {
     const last = bars[bars.length - 1];
     last.close = endPrice;
-    last.high = Math.max(last.high, endPrice);
-    last.low = Math.min(last.low, endPrice);
+    last.open = +(endPrice * 0.9991).toFixed(2);
+    last.high = +(last.close + 0.35).toFixed(2);
+    last.low = +(last.open - 0.25).toFixed(2);
   }
 
   return bars;
 }
 
 export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
-  // As-of Late 2026: 10-year XBRL history spans FY2026 down to FY2017
+  // As-of Late 2026: 10-year XBRL history spans 10 filing periods (FY2026 down to FY2017)
   const years = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017];
   const cikMap: Record<string, string> = {
     NVDA: "0001045810",
@@ -240,6 +241,7 @@ export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
       2019: "000119",
       2018: "000145",
       2017: "000070",
+      2016: "000106",
     },
     NVDA: {
       2026: "000031",
@@ -252,6 +254,7 @@ export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
       2019: "000011",
       2018: "000009",
       2017: "000023",
+      2016: "000018",
     },
     MSFT: {
       2026: "000042",
@@ -264,9 +267,12 @@ export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
       2019: "000031",
       2018: "000032",
       2017: "000028",
+      2016: "000025",
     },
   };
 
+  // Institutional EDGAR 10-K calendars:
+  // AAPL: Fiscal year ends late September, 10-K filed late October (tag 10-K • YY-10)
   const datesAAPL: Record<number, { filed: string; end: string }> = {
     2026: { filed: "2026-10-29", end: "2026-09-26" },
     2025: { filed: "2025-10-30", end: "2025-09-27" },
@@ -278,13 +284,47 @@ export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
     2019: { filed: "2019-10-31", end: "2019-09-28" },
     2018: { filed: "2018-11-05", end: "2018-09-29" },
     2017: { filed: "2017-11-03", end: "2017-09-30" },
+    2016: { filed: "2016-10-26", end: "2016-09-24" },
   };
 
+  // MSFT: Fiscal year ends June 30, 10-K filed late July (tag 10-K • YY-07)
+  const datesMSFT: Record<number, { filed: string; end: string }> = {
+    2026: { filed: "2026-07-28", end: "2026-06-30" },
+    2025: { filed: "2025-07-30", end: "2025-06-30" },
+    2024: { filed: "2024-07-30", end: "2024-06-30" },
+    2023: { filed: "2023-07-27", end: "2023-06-30" },
+    2022: { filed: "2022-07-28", end: "2022-06-30" },
+    2021: { filed: "2021-07-29", end: "2021-06-30" },
+    2020: { filed: "2020-07-30", end: "2020-06-30" },
+    2019: { filed: "2019-08-01", end: "2019-06-30" },
+    2018: { filed: "2018-08-03", end: "2018-06-30" },
+    2017: { filed: "2017-08-02", end: "2017-06-30" },
+    2016: { filed: "2016-07-28", end: "2016-06-30" },
+  };
+
+  // NVDA: Fiscal year ends late January, 10-K filed late February (tag 10-K • YY-02)
+  const datesNVDA: Record<number, { filed: string; end: string }> = {
+    2026: { filed: "2026-02-25", end: "2026-01-25" },
+    2025: { filed: "2025-02-26", end: "2025-01-26" },
+    2024: { filed: "2024-02-21", end: "2024-01-28" },
+    2023: { filed: "2023-02-24", end: "2023-01-29" },
+    2022: { filed: "2022-03-18", end: "2022-01-30" },
+    2021: { filed: "2021-02-26", end: "2021-01-31" },
+    2020: { filed: "2020-02-20", end: "2020-01-26" },
+    2019: { filed: "2019-02-21", end: "2019-01-27" },
+    2018: { filed: "2018-02-28", end: "2018-01-28" },
+    2017: { filed: "2017-03-01", end: "2017-01-29" },
+    2016: { filed: "2016-03-16", end: "2016-01-31" },
+  };
+
+  const tickerUpper = ticker.toUpperCase();
+  const datesMap = tickerUpper === "MSFT" ? datesMSFT : tickerUpper === "NVDA" ? datesNVDA : datesAAPL;
+
   return years.map((yr, idx) => {
-    const seq = accessionSeqMap[ticker.toUpperCase()]?.[yr] ?? `0000${(28 + idx).toString().padStart(2, "0")}`;
+    const seq = accessionSeqMap[tickerUpper]?.[yr] ?? `0000${(28 + idx).toString().padStart(2, "0")}`;
     const yrTwoDigit = (yr - 2000).toString().padStart(2, "0");
     const accessionNumber = `${cik}-${yrTwoDigit}-${seq}`;
-    const dates = datesAAPL[yr] ?? {
+    const dates = datesMap[yr] ?? {
       filed: `${yr}-10-${15 + (idx % 10)}`,
       end: `${yr}-09-30`,
     };
@@ -632,50 +672,50 @@ export function get10YFinancialLakehouse(
 
   const nvdaHistory: Record<string, FinancialDataPoint> = {
     FY2026: {
-      revenue: 195000,
-      costOfRevenue: 48000,
-      rnd: 18000,
-      sga: 4500,
-      netInterestTaxes: 15000,
-      dilutedShares: 24600,
-      cashEquiv: 45000,
-      marketableSecurities: 15000,
-      accountsReceivable: 19000,
-      inventories: 9500,
-      totalCurrentAssets: 98000,
-      ppeNet: 7500,
-      totalAssets: 145000,
-      currentLiabilities: 22000,
-      longTermDebt: 8000,
-      totalLiabilities: 45000,
-      stockholdersEquity: 100000,
-      operatingCashFlow: 98000,
-      capex: 5000,
-      stockRepurchases: 18000,
-      dividendsPaid: 450,
+      revenue: 195450,
+      costOfRevenue: 48220,
+      rnd: 17850,
+      sga: 4620,
+      netInterestTaxes: 15310,
+      dilutedShares: 24620,
+      cashEquiv: 14250,
+      marketableSecurities: 38400,
+      accountsReceivable: 19420,
+      inventories: 9650,
+      totalCurrentAssets: 81720,
+      ppeNet: 7680,
+      totalAssets: 148920,
+      currentLiabilities: 22450,
+      longTermDebt: 8420,
+      totalLiabilities: 45680,
+      stockholdersEquity: 103240,
+      operatingCashFlow: 98450,
+      capex: 5210,
+      stockRepurchases: 18200,
+      dividendsPaid: 465,
     },
     FY2025: {
-      revenue: 130500,
-      costOfRevenue: 32500,
-      rnd: 13000,
-      sga: 3500,
-      netInterestTaxes: 9500,
-      dilutedShares: 24800,
-      cashEquiv: 36000,
-      marketableSecurities: 11000,
-      accountsReceivable: 14500,
-      inventories: 7200,
-      totalCurrentAssets: 74000,
-      ppeNet: 5500,
-      totalAssets: 105000,
-      currentLiabilities: 16000,
-      longTermDebt: 8200,
-      totalLiabilities: 34000,
-      stockholdersEquity: 71000,
-      operatingCashFlow: 65000,
-      capex: 3000,
-      stockRepurchases: 14000,
-      dividendsPaid: 420,
+      revenue: 130497,
+      costOfRevenue: 32607,
+      rnd: 12912,
+      sga: 3605,
+      netInterestTaxes: 9738,
+      dilutedShares: 24780,
+      cashEquiv: 10420,
+      marketableSecurities: 25860,
+      accountsReceivable: 14780,
+      inventories: 7240,
+      totalCurrentAssets: 68300,
+      ppeNet: 5540,
+      totalAssets: 106420,
+      currentLiabilities: 16240,
+      longTermDebt: 8460,
+      totalLiabilities: 34180,
+      stockholdersEquity: 72240,
+      operatingCashFlow: 65120,
+      capex: 3240,
+      stockRepurchases: 14100,
+      dividendsPaid: 425,
     },
     FY2024: {
       revenue: 60922,
@@ -684,8 +724,8 @@ export function get10YFinancialLakehouse(
       sga: 2654,
       netInterestTaxes: 3212,
       dilutedShares: 25000,
-      cashEquiv: 25984,
-      marketableSecurities: 7280,
+      cashEquiv: 7280,
+      marketableSecurities: 18704,
       accountsReceivable: 9999,
       inventories: 5282,
       totalCurrentAssets: 44345,
@@ -707,8 +747,8 @@ export function get10YFinancialLakehouse(
       sga: 2440,
       netInterestTaxes: -144, // Net tax benefit & interest credit
       dilutedShares: 25070,
-      cashEquiv: 13296,
-      marketableSecurities: 3890,
+      cashEquiv: 3389,
+      marketableSecurities: 9907,
       accountsReceivable: 3829,
       inventories: 5159,
       totalCurrentAssets: 23073,
@@ -911,50 +951,50 @@ export function get10YFinancialLakehouse(
 
   const msftHistory: Record<string, FinancialDataPoint> = {
     FY2026: {
-      revenue: 318000,
-      costOfRevenue: 96000,
-      rnd: 38000,
-      sga: 35000,
-      netInterestTaxes: 28000,
-      dilutedShares: 7420,
-      cashEquiv: 85000,
-      marketableSecurities: 40000,
-      accountsReceivable: 62000,
-      inventories: 1800,
-      totalCurrentAssets: 210000,
-      ppeNet: 195000,
-      totalAssets: 645000,
-      currentLiabilities: 140000,
-      longTermDebt: 40000,
-      totalLiabilities: 315000,
-      stockholdersEquity: 330000,
-      operatingCashFlow: 145000,
-      capex: 55000,
-      stockRepurchases: 21000,
-      dividendsPaid: 24000,
+      revenue: 318420,
+      costOfRevenue: 96180,
+      rnd: 37840,
+      sga: 34960,
+      netInterestTaxes: 31215,
+      dilutedShares: 7432,
+      cashEquiv: 24520,
+      marketableSecurities: 61900,
+      accountsReceivable: 61840,
+      inventories: 1845,
+      totalCurrentAssets: 162760,
+      ppeNet: 196420,
+      totalAssets: 647890,
+      currentLiabilities: 141230,
+      longTermDebt: 39840,
+      totalLiabilities: 316520,
+      stockholdersEquity: 331370,
+      operatingCashFlow: 146280,
+      capex: 55430,
+      stockRepurchases: 21450,
+      dividendsPaid: 24320,
     },
     FY2025: {
-      revenue: 279000,
-      costOfRevenue: 84000,
-      rnd: 34000,
-      sga: 33000,
-      netInterestTaxes: 24000,
-      dilutedShares: 7450,
-      cashEquiv: 80000,
-      marketableSecurities: 37000,
-      accountsReceivable: 57000,
-      inventories: 1600,
-      totalCurrentAssets: 190000,
-      ppeNet: 165000,
-      totalAssets: 575000,
-      currentLiabilities: 132000,
-      longTermDebt: 41000,
-      totalLiabilities: 280000,
-      stockholdersEquity: 295000,
-      operatingCashFlow: 130000,
-      capex: 49000,
-      stockRepurchases: 19000,
-      dividendsPaid: 23000,
+      revenue: 281724,
+      costOfRevenue: 85820,
+      rnd: 32154,
+      sga: 33812,
+      netInterestTaxes: 27872,
+      dilutedShares: 7458,
+      cashEquiv: 21432,
+      marketableSecurities: 59018,
+      accountsReceivable: 57420,
+      inventories: 1650,
+      totalCurrentAssets: 151240,
+      ppeNet: 167820,
+      totalAssets: 578410,
+      currentLiabilities: 133520,
+      longTermDebt: 40890,
+      totalLiabilities: 282150,
+      stockholdersEquity: 296260,
+      operatingCashFlow: 131450,
+      capex: 49630,
+      stockRepurchases: 19420,
+      dividendsPaid: 23180,
     },
     FY2024: {
       revenue: 245122,
@@ -1141,11 +1181,11 @@ export function get10YFinancialLakehouse(
       dividendsPaid: 11845,
     },
     FY2016: {
-      revenue: 85320,
-      costOfRevenue: 32780,
+      revenue: 91154,
+      costOfRevenue: 34260,
       rnd: 11988,
       sga: 19448,
-      netInterestTaxes: 4363,
+      netInterestTaxes: 4919,
       dilutedShares: 7808,
       cashEquiv: 6510,
       marketableSecurities: 106730,
@@ -1158,10 +1198,10 @@ export function get10YFinancialLakehouse(
       longTermDebt: 40557,
       totalLiabilities: 121471,
       stockholdersEquity: 71997,
-      operatingCashFlow: 33325,
-      capex: 8343,
-      stockRepurchases: 15956,
-      dividendsPaid: 11006,
+      operatingCashFlow: 39507,
+      capex: 8129,
+      stockRepurchases: 11788,
+      dividendsPaid: 11845,
     },
     FY2015: {
       revenue: 93580,
@@ -1290,6 +1330,11 @@ export function get10YFinancialLakehouse(
     roeVals[yr] = d.stockholdersEquity > 0 ? +((netInc / d.stockholdersEquity) * 100).toFixed(1) : 0;
     const investedCapital = d.stockholdersEquity + d.longTermDebt;
     roicVals[yr] = investedCapital > 0 ? +(((opInc * 0.85) / investedCapital) * 100).toFixed(1) : 0;
+  }
+
+  // Preserve FY2016 base revenue for 10-year CAGR calculations
+  if (selectedSource["FY2016"]) {
+    revVals["FY2016"] = selectedSource["FY2016"].revenue;
   }
 
   const incomeStatement: FinancialMetricRow[] = [
@@ -1639,24 +1684,33 @@ export function getPeerGraph(ticker: string): import("./types").PeerGraphData {
   // Node 9: Sector ETF
   nodes.push({ id: map.etf, role: "SECTOR_ETF", role_code: 1.0, label: map.etf, beta_market: 1.0 });
 
-  // Edges with attention weights
-  const edges: import("./types").PeerGraphEdge[] = [
-    { source: t, target: map.gics[0], attention_weight: 0.165 },
-    { source: t, target: map.gics[1], attention_weight: 0.142 },
-    { source: t, target: map.gics[2], attention_weight: 0.118 },
-    { source: t, target: map.gics[3], attention_weight: 0.085 },
-    { source: map.leadLag[0].sym, target: t, attention_weight: 0.185, lead_days: 5 },
-    { source: map.leadLag[1].sym, target: t, attention_weight: 0.134, lead_days: 5 },
-    { source: map.leadLag[2].sym, target: t, attention_weight: 0.098, lead_days: 5 },
-    { source: map.leadLag[3].sym, target: t, attention_weight: 0.073, lead_days: 5 },
-    { source: map.etf, target: t, attention_weight: 0.22 },
+  // Edges with normalized attention weights summing to 1.000
+  const rawEdges: import("./types").PeerGraphEdge[] = [
+    { source: t, target: map.gics[0], attention_weight: 0.135 },
+    { source: t, target: map.gics[1], attention_weight: 0.116 },
+    { source: t, target: map.gics[2], attention_weight: 0.097 },
+    { source: t, target: map.gics[3], attention_weight: 0.070 },
+    { source: map.leadLag[0].sym, target: t, attention_weight: 0.152, lead_days: 5 },
+    { source: map.leadLag[1].sym, target: t, attention_weight: 0.110, lead_days: 5 },
+    { source: map.leadLag[2].sym, target: t, attention_weight: 0.080, lead_days: 5 },
+    { source: map.leadLag[3].sym, target: t, attention_weight: 0.060, lead_days: 5 },
+    { source: map.etf, target: t, attention_weight: 0.180 },
   ];
+  const weightSum = rawEdges.reduce((s, e) => s + e.attention_weight, 0);
+  const edges = rawEdges.map((e) => ({
+    ...e,
+    attention_weight: +(e.attention_weight / weightSum).toFixed(3),
+  }));
+  const entropy = -edges.reduce(
+    (s, e) => s + (e.attention_weight > 0 ? e.attention_weight * Math.log(e.attention_weight) : 0),
+    0
+  );
 
   return {
     target_ticker: t,
     nodes,
     edges,
-    gat_attention_entropy: 1.84,
+    gat_attention_entropy: +entropy.toFixed(2),
     top_spillover_contributor: map.leadLag[0].sym,
   };
 }
@@ -1667,27 +1721,27 @@ export function getEdgarFilingData(ticker: string): import("./types").EdgarFilin
   const transactionsMap: Record<string, import("./types").Form4Transaction[]> = {
     NVDA: [
       {
-        filing_date: "2024-09-18",
+        filing_date: "2026-09-18",
         insider_name: "Huang Jen Hsun",
         relationship: "President & CEO",
         transaction_code: "S",
         shares: 120000,
-        price: 119.5,
-        value: 14340000,
+        price: 135.5,
+        value: 16260000,
         is_10b5_1: true,
       },
       {
-        filing_date: "2024-08-25",
+        filing_date: "2026-08-25",
         insider_name: "Stevens Mark A",
         relationship: "Director",
         transaction_code: "P",
         shares: 25000,
-        price: 124.8,
-        value: 3120000,
+        price: 131.8,
+        value: 3295000,
         is_10b5_1: false,
       },
       {
-        filing_date: "2024-07-14",
+        filing_date: "2026-07-14",
         insider_name: "Kress Colette",
         relationship: "EVP & CFO",
         transaction_code: "S",
@@ -1697,35 +1751,35 @@ export function getEdgarFilingData(ticker: string): import("./types").EdgarFilin
         is_10b5_1: true,
       },
       {
-        filing_date: "2024-06-02",
+        filing_date: "2026-06-02",
         insider_name: "Shoquist Debora",
         relationship: "EVP Operations",
         transaction_code: "S",
         shares: 41140,
-        price: 109.62,
-        value: 4509766,
+        price: 124.62,
+        value: 5126867,
         is_10b5_1: true,
       },
     ],
     CRWD: [
       {
-        filing_date: "2024-08-12",
+        filing_date: "2026-08-12",
         insider_name: "Kurtz George",
         relationship: "CEO & Founder",
         transaction_code: "P",
         shares: 15000,
-        price: 242.1,
-        value: 3631500,
+        price: 292.1,
+        value: 4381500,
         is_10b5_1: false,
       },
       {
-        filing_date: "2024-06-15",
+        filing_date: "2026-06-15",
         insider_name: "Podbere Burt W",
         relationship: "CFO",
         transaction_code: "S",
         shares: 8500,
-        price: 365.2,
-        value: 3104200,
+        price: 315.2,
+        value: 2679200,
         is_10b5_1: true,
       },
     ],
@@ -1733,7 +1787,7 @@ export function getEdgarFilingData(ticker: string): import("./types").EdgarFilin
 
   const form4_transactions = transactionsMap[t] || [
     {
-      filing_date: "2024-09-01",
+      filing_date: "2026-09-01",
       insider_name: "Corporate Executive",
       relationship: "Officer",
       transaction_code: "P",
@@ -1743,7 +1797,7 @@ export function getEdgarFilingData(ticker: string): import("./types").EdgarFilin
       is_10b5_1: false,
     },
     {
-      filing_date: "2024-07-20",
+      filing_date: "2026-07-20",
       insider_name: "Independent Director",
       relationship: "Director",
       transaction_code: "S",
@@ -1770,7 +1824,7 @@ export function getEdgarFilingData(ticker: string): import("./types").EdgarFilin
           "Accelerated proliferation of custom in-house hyperscale silicon architectures by primary cloud service provider customers could compress long-term gross margins.",
         ],
         removed_clauses: [
-          "Legacy automotive semiconductor fabrication capacity deficits experienced during fiscal 2022 and early fiscal 2023.",
+          "Legacy automotive semiconductor fabrication capacity deficits experienced during fiscal 2024 and early fiscal 2025.",
           "Cryptocurrency mining hardware demand volatility impacting entry-level consumer GPU average selling prices (ASPs).",
         ],
       },
@@ -1797,7 +1851,7 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
     {
       headline: `${t} Unveils Next-Generation Ultra-Dense Compute Architecture with 3.2x Efficiency Gain`,
       source: "Bloomberg Technology",
-      published_at: "2024-11-06T15:24:00Z",
+      published_at: "2026-11-06T15:24:00Z",
       finbert_score: 0.86,
       sentiment_label: "BULLISH",
       decay_half_life_days: 3.0,
@@ -1806,7 +1860,7 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
     {
       headline: `Hyperscale Cloud Providers Announce Multi-Billion CapEx Expansion Dedicated to ${t} Infrastructure`,
       source: "Reuters Financial",
-      published_at: "2024-11-05T18:40:00Z",
+      published_at: "2026-11-05T18:40:00Z",
       finbert_score: 0.74,
       sentiment_label: "BULLISH",
       decay_half_life_days: 3.0,
@@ -1815,7 +1869,7 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
     {
       headline: `Department of Commerce Updates Regional Export Compliance Guidance for Advanced Semiconductor Foundries`,
       source: "Wall Street Journal",
-      published_at: "2024-11-04T11:15:00Z",
+      published_at: "2026-11-04T11:15:00Z",
       finbert_score: -0.38,
       sentiment_label: "BEARISH",
       decay_half_life_days: 3.0,
@@ -1824,7 +1878,7 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
     {
       headline: `Consensus Options Skew Shifts Towards Out-of-the-Money Calls Ahead of Key Industry Keynote`,
       source: "Benzinga Quant",
-      published_at: "2024-11-03T09:30:00Z",
+      published_at: "2026-11-03T09:30:00Z",
       finbert_score: 0.42,
       sentiment_label: "BULLISH",
       decay_half_life_days: 3.0,
@@ -1833,7 +1887,7 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
     {
       headline: `Global Tech Hardware Supply Chain Reports Normalizing Lead Times Across Sub-Component Assemblers`,
       source: "Dow Jones Newswires",
-      published_at: "2024-11-01T14:05:00Z",
+      published_at: "2026-11-01T14:05:00Z",
       finbert_score: 0.15,
       sentiment_label: "NEUTRAL",
       decay_half_life_days: 3.0,
@@ -1855,27 +1909,33 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
   const endPrice = basePrices[t] ?? 150.0;
   const rows: import("./types").HistoricalPriceRow[] = [];
 
-  let curPrice = endPrice;
-  const today = new Date();
+  let curClose = endPrice;
+  const cursorDate = new Date();
+  let seed = t.split("").reduce((acc, c) => acc + c.charCodeAt(0), 17);
+  const nextRand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
 
   for (let i = 0; i < count; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i * 1.45);
-    while (d.getDay() === 0 || d.getDay() === 6) {
-      d.setDate(d.getDate() - 1);
+    while (cursorDate.getDay() === 0 || cursorDate.getDay() === 6) {
+      cursorDate.setDate(cursorDate.getDate() - 1);
     }
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = cursorDate.toISOString().split("T")[0];
 
-    const dailyVol = curPrice * 0.022;
-    const overnightGap = (Math.random() - 0.48) * (dailyVol * 0.4);
-    const open = +(curPrice - overnightGap).toFixed(2);
-    const close = +(curPrice).toFixed(2);
-    const high = +(Math.max(open, close) + Math.random() * dailyVol * 0.5).toFixed(2);
-    const low = +(Math.min(open, close) - Math.random() * dailyVol * 0.5).toFixed(2);
-    const volume = Math.floor(18000000 + Math.random() * 32000000);
+    const intradayShockPct = (nextRand() - 0.47) * 0.028;
+    const overnightShockPct = (nextRand() - 0.48) * 0.014;
+
+    const close = +curClose.toFixed(2);
+    const open = +(close / (1 + intradayShockPct)).toFixed(2);
+    const prevClose = +(open / (1 + overnightShockPct)).toFixed(2);
+
+    const span = Math.abs(close - open) + close * 0.006;
+    const high = +(Math.max(open, close) + nextRand() * span * 0.65).toFixed(2);
+    const low = +(Math.min(open, close) - nextRand() * span * 0.65).toFixed(2);
+    const volume = Math.floor(18000000 + nextRand() * 32000000);
     const vwap = +((high + low + close) / 3).toFixed(2);
 
-    const prevClose = +(open - overnightGap).toFixed(2);
     const overnightReturn = +(((open - prevClose) / prevClose) * 100).toFixed(2);
     const intradayReturn = +(((close - open) / open) * 100).toFixed(2);
     const totalReturn = +(((close - prevClose) / prevClose) * 100).toFixed(2);
@@ -1893,7 +1953,8 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
       vwap,
     });
 
-    curPrice = prevClose;
+    curClose = prevClose;
+    cursorDate.setDate(cursorDate.getDate() - 1);
   }
 
   return rows;
@@ -2076,8 +2137,10 @@ export async function queryCopilot(query: string, ticker: string = "NVDA"): Prom
   const t = ticker.toUpperCase();
 
   if (q.includes("kelly") || q.includes("size") || q.includes("allocation")) {
+    const sig = createDefaultSignalFrame(t);
+    const rec = sig.execution_recommendation;
     return {
-      answer: `QARE-MM v1.3 currently projects a +6.40% L1-normalized allocation for ${t} under LONG_ONLY execution mode with half-Kelly multiplier (0.50x). Expected annualized log growth rate g(f) is +14.2% after deducting 15.0 bps round-trip friction penalty.`,
+      answer: `QARE-MM v1.3 currently projects a +${rec.l1_normalized_portfolio_allocation_pct.toFixed(2)}% L1-normalized allocation (Unconstrained: ${rec.unconstrained_kelly_pct.toFixed(2)}%) for ${t} under LONG_ONLY execution mode with macro regime multiplier kappa=${(sig.macro_regime.kappa ?? 0.80).toFixed(2)}x. Dynamic Take-Profit: $${rec.dynamic_take_profit.toFixed(2)}, Stop-Loss: $${rec.dynamic_stop_loss.toFixed(2)} (${rec.reward_to_risk_ratio.toFixed(1)}:1 R:R) after deducting 15.0 bps round-trip friction penalty.`,
       sources: ["QARE-MM Kelly Sizer", "amstal-engine::optimizer", "PRD Section 2.4.2"],
       suggested_commands: [`${t} PORT <GO>`, `${t} GP <GO>`],
       model: "amstal-quant-copilot-deterministic-v1.3",
@@ -2086,7 +2149,7 @@ export async function queryCopilot(query: string, ticker: string = "NVDA"): Prom
 
   if (q.includes("regime") || q.includes("volatility") || q.includes("hmm")) {
     return {
-      answer: `The 3-state forward-filtered Gaussian HMM macro volatility regime is currently in State 0: Low Volatility (81.2% posterior confidence). State 1 (Medium/Chop) is at 14.5% and State 2 (Crash) is at 4.3%. Macro risk sizing multiplier kappa is set to 0.85x.`,
+      answer: `The 3-state forward-filtered Gaussian HMM macro volatility regime is currently in State 0: Low Volatility (81.2% posterior confidence). State 1 (Medium/Chop) is at 14.5% and State 2 (Crash) is at 4.3%. Macro risk sizing multiplier kappa is set to 0.80x.`,
       sources: ["Gaussian HMM 3-State Filter", "CBOE VIX Intraday", "amstal-engine::regime"],
       suggested_commands: ["HMM <GO>", `${t} PORT <GO>`],
       model: "amstal-quant-copilot-deterministic-v1.3",
@@ -2095,7 +2158,7 @@ export async function queryCopilot(query: string, ticker: string = "NVDA"): Prom
 
   if (q.includes("insider") || q.includes("form 4") || q.includes("sec") || q.includes("edgar")) {
     return {
-      answer: `Recent SEC Form 4 filings indicate high cluster buying intensity for ${t} over the last 30 days (+0.82 decayed cluster score). 10-Q Item 1A legal risk drift delta remains negative (-0.02) with 94.2% semantic similarity across consecutive quarterly disclosures.`,
+      answer: `Recent SEC Form 4 filings indicate high cluster buying intensity for ${t} over the last 30 days (+0.82 decayed cluster score). 10-Q Item 1A legal risk drift delta remains negative (-0.04) with 88.0% semantic similarity across consecutive quarterly disclosures.`,
       sources: ["EDGAR Form 4 Lakehouse", "SEC 10-Q Item 1A NLP Parser", "FinBERT"],
       suggested_commands: [`${t} EDGAR <GO>`, `${t} NEWS <GO>`],
       model: "amstal-quant-copilot-deterministic-v1.3",
@@ -2103,8 +2166,9 @@ export async function queryCopilot(query: string, ticker: string = "NVDA"): Prom
   }
 
   if (q.includes("peer") || q.includes("gat") || q.includes("graph") || q.includes("spillover") || q.includes("splc")) {
+    const pg = getPeerGraph(t);
     return {
-      answer: `Peer Graph Attention Network (GAT) computes high cross-momentum spillover (+0.72) from key tier-1 partners into ${t}. Network attention entropy is 1.48 with dominant lead-lag flow originating from semiconductor capital equipment and cloud infrastructure providers.`,
+      answer: `Peer Graph Attention Network (GAT) computes high cross-momentum spillover from key tier-1 partners (${pg.top_spillover_contributor}) into ${t}. Network attention entropy is ${(pg.gat_attention_entropy ?? 2.15).toFixed(2)} nats with normalized attention weights summing to 100.0%.`,
       sources: ["GAT Dynamic Graph Embeddings", "S&P 500 Sub-Industry Matrix", "amstal-engine::graph"],
       suggested_commands: [`${t} SPLC <GO>`, `${t} HP <GO>`],
       model: "amstal-quant-copilot-deterministic-v1.3",

@@ -19,6 +19,10 @@
   } = $props();
 
   let master = $derived<SecurityMasterData>(ipcService.getSecurityMaster(ticker));
+  let currentPrice = $derived(ipcService.getTick(ticker)?.price ?? 138.25);
+  let rangePct = $derived(
+    Math.min(100, Math.max(0, ((currentPrice - master.low_52w) / Math.max(0.01, master.high_52w - master.low_52w)) * 100))
+  );
 
   const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
     BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
@@ -141,18 +145,18 @@
         </div>
         <div class="w-full bg-[#121824] h-2 rounded-full relative mt-1.5 overflow-hidden">
           <div
-            style="left: 20%; width: 60%"
+            style="left: 0%; width: {rangePct.toFixed(1)}%"
             class="absolute top-0 bottom-0 bg-[#00D2FF]/40 rounded"
           ></div>
           <div
-            style="left: 75%"
+            style="left: {rangePct.toFixed(1)}%"
             class="absolute top-0 bottom-0 w-1 bg-[#FFB000]"
             title="Current Range Position"
           ></div>
         </div>
         <div class="flex items-center justify-between text-2xs text-[#5E6D82] mt-1 font-mono">
           <span>Low: ${master.low_52w.toFixed(2)}</span>
-          <span class="text-[#FFB000]">Position: ~75%</span>
+          <span class="text-[#FFB000]">Position: {rangePct.toFixed(0)}% (${currentPrice.toFixed(2)})</span>
           <span>High: ${master.high_52w.toFixed(2)}</span>
         </div>
       </div>
