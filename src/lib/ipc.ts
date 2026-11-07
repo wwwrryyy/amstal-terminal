@@ -11,6 +11,10 @@ import {
   type HistoricalPriceRow,
   type AnalystRatingsData,
   type CopilotQueryResponse,
+  type EngineStatus,
+  type LakehouseStats,
+  type ParquetQueryResult,
+  type MacroDispatchResult,
 } from "./types";
 import {
   createDefaultSignalFrame,
@@ -590,6 +594,105 @@ export class IpcClientService {
 
   public async queryCopilot(query: string, ticker: string = "NVDA"): Promise<CopilotQueryResponse> {
     return queryCopilot(query, ticker);
+  }
+
+  // -------------------------------------------------------------------------
+  // Native Tauri 2.0 Desktop Shell Integration
+  // -------------------------------------------------------------------------
+
+  public isTauriDesktop(): boolean {
+    return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+  }
+
+  public async invokeTauri<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
+    if (this.isTauriDesktop()) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return await invoke<T>(cmd, args);
+      } catch (err) {
+        throw new Error(`Tauri invoke failed for ${cmd}: ${err}`);
+      }
+    }
+    throw new Error(`Native desktop execution is only available inside Tauri shell (command: ${cmd})`);
+  }
+
+  public async checkEngineStatus(): Promise<EngineStatus> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<EngineStatus>("check_engine_status");
+    }
+    return {
+      is_running: this.connectionState === "CONNECTED",
+      socket_path: "/tmp/amstal.sock",
+      socket_exists: this.connectionState === "CONNECTED",
+      ws_host: "127.0.0.1",
+      ws_port: 8194,
+      ws_alive: this.connectionState === "CONNECTED",
+      managed_child_pid: null,
+      uptime_secs: this.connectionState === "CONNECTED" ? 42 : 0,
+    };
+  }
+
+  public async startEngine(): Promise<string> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<string>("start_engine");
+    }
+    return "Simulated: Engine daemon spawn signal sent";
+  }
+
+  public async stopEngine(): Promise<string> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<string>("stop_engine");
+    }
+    return "Simulated: Engine daemon stop signal sent";
+  }
+
+  public async restartEngine(): Promise<string> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<string>("restart_engine");
+    }
+    return "Simulated: Engine daemon restart signal sent";
+  }
+
+  public async queryParquet(sqlQuery: string): Promise<ParquetQueryResult> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<ParquetQueryResult>("query_parquet", { sqlQuery });
+    }
+    return {
+      columns: ["ticker", "timestamp", "close", "volume"],
+      rows: [
+        { ticker: "NVDA", timestamp: "2024-11-06T20:00:00Z", close: 138.25, volume: 42500000 },
+        { ticker: "AAPL", timestamp: "2024-11-06T20:00:00Z", close: 224.5, volume: 38100000 },
+      ],
+      row_count: 2,
+      execution_time_ms: 1.45,
+    };
+  }
+
+  public async getLakehouseStats(): Promise<LakehouseStats> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<LakehouseStats>("get_lakehouse_stats");
+    }
+    return {
+      base_lakehouse_path: "amstal-engine/data",
+      exists: true,
+      processed_partitions_count: 250,
+      universe_snapshots_count: 10,
+      total_size_bytes: 52428800,
+    };
+  }
+
+  public async processHardwareMacro(keyCode: string): Promise<MacroDispatchResult> {
+    if (this.isTauriDesktop()) {
+      return this.invokeTauri<MacroDispatchResult>("process_hardware_macro", { keyCode });
+    }
+    const kc = keyCode.toUpperCase();
+    const action = kc === "AM_GO" ? "EXECUTE_GO" : kc === "AM_CANCEL" ? "CANCEL_COMMAND" : "NAVIGATE_PANEL";
+    return {
+      key_code: kc,
+      routed_action: action,
+      mnemonic: kc.startsWith("AM_") ? kc.slice(3) : null,
+      handled: true,
+    };
   }
 
   public destroy(): void {

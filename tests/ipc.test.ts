@@ -130,6 +130,34 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     expect(directCopilot.suggested_commands).toContain("NVDA EDGAR <GO>");
   });
 
+  it("handles Tauri desktop bridge methods with environment fallback", async () => {
+    expect(ipc.isTauriDesktop()).toBe(false);
+
+    const engineStatus = await ipc.checkEngineStatus();
+    expect(engineStatus).toBeDefined();
+    expect(engineStatus.ws_port).toBe(8194);
+    expect(engineStatus.socket_path).toBe("/tmp/amstal.sock");
+
+    const lakehouseStats = await ipc.getLakehouseStats();
+    expect(lakehouseStats).toBeDefined();
+    expect(lakehouseStats.exists).toBe(true);
+    expect(lakehouseStats.processed_partitions_count).toBeGreaterThan(0);
+
+    const parquetRes = await ipc.queryParquet("SELECT * FROM prices LIMIT 10");
+    expect(parquetRes).toBeDefined();
+    expect(parquetRes.columns).toContain("ticker");
+    expect(parquetRes.row_count).toBeGreaterThan(0);
+    expect(parquetRes.execution_time_ms).toBeGreaterThan(0);
+
+    const macroRes = await ipc.processHardwareMacro("AM_GO");
+    expect(macroRes.handled).toBe(true);
+    expect(macroRes.routed_action).toBe("EXECUTE_GO");
+
+    const macroNav = await ipc.processHardwareMacro("AM_PORT");
+    expect(macroNav.handled).toBe(true);
+    expect(macroNav.mnemonic).toBe("PORT");
+  });
+
   it("returns -32601 error for unknown methods", async () => {
     const res = await ipc.executeJsonRpc("unknown_method_xyz");
     expect(res.jsonrpc).toBe("2.0");

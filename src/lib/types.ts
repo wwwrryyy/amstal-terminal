@@ -268,4 +268,38 @@ export interface CopilotQueryResponse {
   model: string;
 }
 
+export interface EngineStatus {
+  is_running: boolean;
+  socket_path: string;
+  socket_exists: boolean;
+  ws_host: string;
+  ws_port: number;
+  ws_alive: boolean;
+  managed_child_pid?: number | null;
+  uptime_secs: number;
+}
+
+export interface LakehouseStats {
+  base_lakehouse_path: string;
+  exists: boolean;
+  processed_partitions_count: number;
+  universe_snapshots_count: number;
+  total_size_bytes: number;
+}
+
+export interface ParquetQueryResult {
+  columns: string[];
+  rows: Array<Record<string, any>>;
+  row_count: number;
+  execution_time_ms: number;
+}
+
+export interface MacroDispatchResult {
+  key_code: string;
+  routed_action: string;
+  mnemonic?: string | null;
+  handled: boolean;
+}
+
+
 
