@@ -264,16 +264,19 @@ export class IpcClientService {
       updatedSignals[ticker] = updatedSig;
     }
 
-    // Micro regime drift
-    const probLow = Math.min(0.95, Math.max(0.65, this.macroRegime.filtered_probabilities.low_volatility + (Math.random() - 0.5) * 0.002));
-    const probMed = Math.min(0.25, Math.max(0.05, this.macroRegime.filtered_probabilities.medium_volatility + (Math.random() - 0.5) * 0.002));
-    const probHigh = +(1.0 - probLow - probMed).toFixed(3);
+    // Micro regime drift (strictly bounded on simplex so sum == 1.0 and p_i > 0)
+    const rawLow = Math.min(0.92, Math.max(0.65, this.macroRegime.filtered_probabilities.low_volatility + (Math.random() - 0.5) * 0.002));
+    const maxMed = Math.max(0.04, 0.99 - rawLow);
+    const rawMed = Math.min(maxMed, Math.max(0.04, this.macroRegime.filtered_probabilities.medium_volatility + (Math.random() - 0.5) * 0.002));
+    const probLow = +rawLow.toFixed(3);
+    const probMed = +rawMed.toFixed(3);
+    const probHigh = +Math.max(0.001, 1.0 - probLow - probMed).toFixed(3);
 
     this.macroRegime = {
       ...this.macroRegime,
       filtered_probabilities: {
-        low_volatility: +probLow.toFixed(3),
-        medium_volatility: +probMed.toFixed(3),
+        low_volatility: probLow,
+        medium_volatility: probMed,
         high_volatility: probHigh,
       },
     };
@@ -320,10 +323,6 @@ export class IpcClientService {
     // If active websocket is open and daemon is online, dispatch through it
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          resolve(this.mockJsonRpcResponse(method, params, id));
-        }, 1500);
-
         const tempHandler = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
@@ -334,6 +333,11 @@ export class IpcClientService {
             }
           } catch {}
         };
+
+        const timeout = setTimeout(() => {
+          this.ws?.removeEventListener("message", tempHandler);
+          resolve(this.mockJsonRpcResponse(method, params, id));
+        }, 1500);
 
         this.ws?.addEventListener("message", tempHandler);
         this.ws?.send(
