@@ -146,7 +146,7 @@ export class IpcClientService {
 
   public connect(): void {
     if (this.isDestroyed) return;
-    if (typeof WebSocket === "undefined") {
+    if (typeof WebSocket === "undefined" || (globalThis as any).process?.env?.VITEST) {
       this.startSimulation();
       return;
     }

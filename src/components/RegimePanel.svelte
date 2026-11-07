@@ -52,10 +52,36 @@
     return Math.round((sorted[0] - sorted[1]) * 100);
   });
 
-  // Dynamic Kappa penalty
+  const baseKappa = 0.85;
+
+  // Exact dynamic Kappa haircut: kappa = kappa_0 * (1 - 0.80 * P(S_2)) * (1 - 0.20 * P(S_1))
   let kappa = $derived(
-    regime.kappa ?? +(0.85 * (1 - pHigh * 0.8)).toFixed(2)
+    +(baseKappa * (1.0 - 0.80 * pHigh) * (1.0 - 0.20 * pMed)).toFixed(2)
   );
+
+  let stressPenalty = $derived(
+    -(baseKappa - kappa).toFixed(2)
+  );
+
+  function solveStationaryVector(A: number[][]): [number, number, number] {
+    if (!A || A.length !== 3) return [0.519, 0.348, 0.133];
+    // Solve (A^T - I) * pi = 0 with sum(pi) = 1
+    const a00 = A[0][0] - 1.0;
+    const a10 = A[1][0];
+    const a20 = A[2][0];
+
+    const a01 = A[0][1];
+    const a11 = A[1][1] - 1.0;
+    const a21 = A[2][1];
+
+    // Cross product of first two normal vectors
+    const c0 = a10 * a21 - a20 * a11;
+    const c1 = a20 * a01 - a00 * a21;
+    const c2 = a00 * a11 - a10 * a01;
+    const sum = c0 + c1 + c2;
+    if (Math.abs(sum) < 1e-9) return [0.519, 0.348, 0.133];
+    return [c0 / sum, c1 / sum, c2 / sum];
+  }
 
   function getCellShading(prob: number, i: number, j: number): string {
     const alpha = Math.max(0.08, prob * 0.42);
@@ -75,6 +101,22 @@
   ];
 
   let transitionMatrix = $derived(regime.transition_matrix ?? defaultTransitionMatrix);
+
+  let stationaryVector = $derived(solveStationaryVector(transitionMatrix));
+
+  // Expected Duration (mean dwell time in days): 1 / (1 - A_ii)
+  let expectedDwell = $derived([
+    +(1.0 / Math.max(0.001, 1.0 - transitionMatrix[0][0])).toFixed(1),
+    +(1.0 / Math.max(0.001, 1.0 - transitionMatrix[1][1])).toFixed(1),
+    +(1.0 / Math.max(0.001, 1.0 - transitionMatrix[2][2])).toFixed(1),
+  ]);
+
+  // True Half-Life (days to 50% persistence decay): ln(0.5) / ln(A_ii)
+  let trueHalfLives = $derived([
+    +(Math.log(0.5) / Math.log(transitionMatrix[0][0])).toFixed(1),
+    +(Math.log(0.5) / Math.log(transitionMatrix[1][1])).toFixed(1),
+    +(Math.log(0.5) / Math.log(transitionMatrix[2][2])).toFixed(1),
+  ]);
 
   // Simulated 60-period regime history ribbon
   const historyStates = [
@@ -260,15 +302,19 @@
             </tbody>
           </table>
 
-          <!-- Stationary Distribution & Persistence Diagnostics (Fills dead space) -->
+          <!-- Stationary Distribution & Persistence Diagnostics (Strict Mathematical Exactness) -->
           <div class="pt-2 border-t border-[#172033]/80 flex flex-col gap-1 text-3xs font-mono">
             <div class="flex items-center justify-between text-[#5E6D82]">
               <span>STATIONARY VECTOR &pi;:</span>
-              <span class="text-[#E6EDF5] font-bold">[78.4% | 17.1% | 4.5%]</span>
+              <span class="text-[#E6EDF5] font-bold">[{(stationaryVector[0] * 100).toFixed(1)}% | {(stationaryVector[1] * 100).toFixed(1)}% | {(stationaryVector[2] * 100).toFixed(1)}%]</span>
             </div>
             <div class="flex items-center justify-between text-[#5E6D82]">
-              <span>REGIME HALF-LIFE t_1/2:</span>
-              <span class="text-[#00D2FF]">S_0: 17.2d | S_1: 7.8d | S_2: 6.7d</span>
+              <span title="Expected dwell duration E[d] = 1 / (1 - A_ii)">EXPECTED DWELL E[d]:</span>
+              <span class="text-[#00D2FF]">S_0: {expectedDwell[0]}d | S_1: {expectedDwell[1]}d | S_2: {expectedDwell[2]}d</span>
+            </div>
+            <div class="flex items-center justify-between text-[#5E6D82]">
+              <span title="True half-life t_1/2 = ln(0.5) / ln(A_ii)">TRUE HALF-LIFE t_1/2:</span>
+              <span class="text-[#8B98A5]">S_0: {trueHalfLives[0]}d | S_1: {trueHalfLives[1]}d | S_2: {trueHalfLives[2]}d</span>
             </div>
           </div>
         </div>
@@ -286,25 +332,26 @@
           <div class="mt-2 p-1.5 bg-[#090D16] border border-[#172033] rounded text-3xs font-mono text-[#8B98A5] flex flex-col gap-1">
             <div class="text-[#00D2FF] font-semibold">&kappa; = &kappa;_0 &times; (1 - 0.80&middot;P(S_2)) &times; (1 - 0.20&middot;P(S_1))</div>
             <div class="flex justify-between text-[#5E6D82]">
-              <span>Base &kappa;_0: <strong class="text-[#E6EDF5]">0.85x</strong></span>
-              <span>Stress Penalty: <strong class="text-[#00FF66]">-0.00x</strong></span>
-              <span>Effective: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}x</strong></span>
+              <span>Base &kappa;_0: <strong class="text-[#E6EDF5]">{baseKappa.toFixed(2)}x</strong></span>
+              <span>Stress Penalty: <strong class="text-[#FFB000]">{stressPenalty}x</strong></span>
+              <span>Effective &kappa;: <strong class="text-[#00D2FF] font-bold">{kappa.toFixed(2)}x</strong></span>
             </div>
           </div>
 
-          <!-- Regime Leverage Limits -->
+          <!-- Asymptotic Regime Haircut Limits -->
           <div class="mt-2 flex flex-col gap-1 text-3xs font-mono">
+            <div class="text-3xs text-[#5E6D82] font-semibold mb-0.5">ASYMPTOTIC LIMITS (WHEN P(S_i) &rarr; 1.0):</div>
             <div class="flex items-center justify-between text-[#5E6D82]">
               <span class="text-[#00FF66]">S_0 CALM (Bull):</span>
-              <span class="text-[#E6EDF5]">1.00x (Full Kelly Deployment)</span>
+              <span class="text-[#E6EDF5]">1.00x Base (0.85x Full Kelly)</span>
             </div>
             <div class="flex items-center justify-between text-[#5E6D82]">
-              <span class="text-[#FFB000]">S_1 CHOP (Mean-Reverting):</span>
-              <span class="text-[#E6EDF5]">0.65x (Tactical De-leveraging)</span>
+              <span class="text-[#FFB000]">S_1 CHOP (Mean-Rev):</span>
+              <span class="text-[#E6EDF5]">0.80x Base (0.68x Haircut)</span>
             </div>
             <div class="flex items-center justify-between text-[#5E6D82]">
               <span class="text-[#FF3344]">S_2 CRISIS (Crash Vol):</span>
-              <span class="text-[#E6EDF5]">0.20x (Defensive Liquidation)</span>
+              <span class="text-[#E6EDF5]">0.20x Base (0.17x Defensive)</span>
             </div>
           </div>
         </div>

@@ -103,8 +103,8 @@
         visible: false,
       },
       grid: {
-        vertLines: { color: "#121824", style: LineStyle.Dotted },
-        horzLines: { color: "#121824", style: LineStyle.Dotted },
+        vertLines: { color: "#0B1019", style: LineStyle.Solid },
+        horzLines: { color: "#0B1019", style: LineStyle.Solid },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -132,6 +132,7 @@
         borderColor: "#172033",
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 14, // 14 bars forward buffer for the 10D vertical time barrier
       },
     });
 
@@ -142,6 +143,24 @@
       borderDownColor: "#FF3366",
       wickUpColor: "#00E676",
       wickDownColor: "#FF3366",
+      autoscaleInfoProvider: (original: () => any) => {
+        const res = original();
+        if (showBarriers && currentSignal?.execution_recommendation) {
+          const rec = currentSignal.execution_recommendation;
+          const tp = rec.dynamic_take_profit;
+          const sl = rec.dynamic_stop_loss;
+          const maxP = Math.max(res?.priceRange?.maxValue ?? 0, tp * 1.02);
+          const minP = Math.min(res?.priceRange?.minValue ?? Infinity, sl * 0.98);
+          return {
+            priceRange: {
+              minValue: minP,
+              maxValue: maxP,
+            },
+            margins: res?.margins,
+          };
+        }
+        return res;
+      },
     });
 
     volumeSeries = chart.addHistogramSeries({
@@ -515,43 +534,43 @@
     </div>
   </div>
 
-  <!-- Metric Badges Bar -->
-  <div class="flex items-center justify-between px-3 py-1 bg-[#0C111B] border-b border-[#172033] text-2xs font-mono">
-    <div class="flex items-center gap-4 text-[#8B98A5]">
-      <div>
-        <span class="text-[#5E6D82]">TP (Upper):</span>
+  <!-- Metric Badges Bar (Single-line, non-wrapping compact layout) -->
+  <div class="flex items-center justify-between px-2.5 py-1 bg-[#0C111B] border-b border-[#172033] text-3xs font-mono overflow-hidden">
+    <div class="flex items-center gap-2.5 text-[#8B98A5] whitespace-nowrap shrink-0">
+      <div title="Take Profit Barrier: +2.0 ATR">
+        <span class="text-[#5E6D82]">TP:</span>
         <span class="text-[#00FF66] font-bold">${currentSignal.execution_recommendation.dynamic_take_profit.toFixed(2)}</span>
       </div>
       <div>
         <span class="text-[#5E6D82]">ENTRY:</span>
         <span class="text-[#00D2FF] font-bold">${currentSignal.execution_recommendation.entry_price.toFixed(2)}</span>
       </div>
-      <div>
-        <span class="text-[#5E6D82]">SL (Lower):</span>
+      <div title="Stop Loss Barrier: -1.0 ATR">
+        <span class="text-[#5E6D82]">SL:</span>
         <span class="text-[#FF3344] font-bold">${currentSignal.execution_recommendation.dynamic_stop_loss.toFixed(2)}</span>
       </div>
       <div>
         <span class="text-[#5E6D82]">R:R:</span>
         <span class="text-[#FFB000] font-bold">{currentSignal.execution_recommendation.reward_to_risk_ratio.toFixed(1)}x</span>
       </div>
-      <div>
+      <div title="Vertical time horizon barrier (+10 trading days in future)">
         <span class="text-[#5E6D82]">HORIZON:</span>
-        <span class="text-[#E6EDF5] font-bold">{currentSignal.horizon_days}D VERTICAL</span>
+        <span class="text-[#E6EDF5] font-bold">+{currentSignal.horizon_days}D (T_10)</span>
       </div>
     </div>
 
-    <!-- Candlestick hover crosshair details -->
+    <!-- Candlestick hover crosshair details (compact single line, no wrapping) -->
     {#if hoverData}
-      <div class="flex items-center gap-2 text-[#5E6D82]">
+      <div class="flex items-center gap-2 text-[#5E6D82] whitespace-nowrap text-3xs pl-2">
         <span>DATE: <strong class="text-[#E6EDF5]">{hoverData.time}</strong></span>
-        <span>O: <strong class="text-[#E6EDF5]">${hoverData.open.toFixed(2)}</strong></span>
-        <span>H: <strong class="text-[#00FF66]">${hoverData.high.toFixed(2)}</strong></span>
-        <span>L: <strong class="text-[#FF3344]">${hoverData.low.toFixed(2)}</strong></span>
-        <span>C: <strong class="text-[#00D2FF]">${hoverData.close.toFixed(2)}</strong></span>
+        <span>O:<strong class="text-[#E6EDF5]">${hoverData.open.toFixed(2)}</strong></span>
+        <span>H:<strong class="text-[#00FF66]">${hoverData.high.toFixed(2)}</strong></span>
+        <span>L:<strong class="text-[#FF3344]">${hoverData.low.toFixed(2)}</strong></span>
+        <span>C:<strong class="text-[#00D2FF]">${hoverData.close.toFixed(2)}</strong></span>
       </div>
     {:else}
-      <div class="text-[#5E6D82] text-2xs">
-        250ms CONFLATION | ATR TRIPLE BARRIERS
+      <div class="text-[#5E6D82] text-3xs whitespace-nowrap hidden sm:block">
+        250ms CONFLATION &bull; TRIPLE BARRIER METHOD
       </div>
     {/if}
   </div>

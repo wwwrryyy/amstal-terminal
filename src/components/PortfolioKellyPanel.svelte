@@ -69,7 +69,8 @@
   // Derived Kelly calculations
   let unconstrainedKelly = $derived(signal.execution_recommendation.unconstrained_kelly_pct || 0);
   let l1NormBase = $derived(signal.execution_recommendation.l1_normalized_portfolio_allocation_pct || 0);
-  let kappa = $derived(signal.macro_regime.kappa ?? 0.85);
+  // Synchronized with HMM dynamic multiplier
+  let kappa = $derived(signal.macro_regime.kappa ?? 0.80);
   let isBuyAction = $derived(signal.execution_recommendation.action === "BUY");
 
   // Scaled portfolio weight: base * (kellyMultiplier / 0.5) * kappa (strictly 0.00% if HOLD/SELL in LONG_ONLY)
@@ -93,8 +94,12 @@
     }
   });
 
-  // Expected growth rate g(f) = p_buy * ln(1 + f * r_win) + p_sell * ln(1 - f * r_loss) - friction
-  let expectedGrowthRate = $derived.by(() => {
+  // Expected growth rate g(f) decomposed: Portfolio Growth vs Committed Risk Sleeve Return
+  // g_port(f) = (termBuy + termSell - friction) * (252 / horizon)
+  let horizonDays = $derived(signal.horizon_days || 10);
+  let tradesPerYear = $derived(252 / horizonDays);
+
+  let expectedPortfolioGrowth = $derived.by(() => {
     const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
     const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
     const f = Math.max(0.01, finalAllocPct / 100);
@@ -104,11 +109,24 @@
 
     const termBuy = pBuy * Math.log(Math.max(0.001, 1 + f * rWin));
     const termSell = pSell * Math.log(Math.max(0.001, 1 - f * rLoss));
-    const g = (termBuy + termSell - friction) * 252 * 100; // annualized %
+    const g = (termBuy + termSell - friction) * tradesPerYear * 100;
     return Math.max(0, g).toFixed(2);
   });
 
-  // Factor breakdown formatted definitions
+  let expectedSleeveGrowth = $derived.by(() => {
+    const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
+    const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
+    const rWin = 0.07;
+    const rLoss = 0.035;
+    const friction = (signal.execution_recommendation.estimated_round_trip_cost_bps || 15) / 10000;
+
+    const sleeveBuy = pBuy * Math.log(1 + rWin);
+    const sleeveSell = pSell * Math.log(1 - rLoss);
+    const g = (sleeveBuy + sleeveSell - friction) * tradesPerYear * 100;
+    return Math.max(0, g).toFixed(1);
+  });
+
+  // Factor breakdown formatted definitions: all centered on 0 (-1 to 1) for strict diverging symmetry
   const factorLabels: Record<string, { label: string; group: string; min: number; max: number }> = {
     residual_momentum_20d_rank: { label: "Residual Momentum (20D)", group: "Technical / Momentum", min: -1, max: 1 },
     overnight_return_rank: { label: "Overnight Return Rank", group: "Technical / Momentum", min: -1, max: 1 },
@@ -121,8 +139,8 @@
     decayed_10q_legal_risk_delta: { label: "10-Q Legal Risk Delta", group: "Fundamental & Filing", min: -1, max: 1 },
     decayed_mda_catalyst_score: { label: "MD&A Catalyst Alpha", group: "Fundamental & Filing", min: -1, max: 1 },
     peer_gat_spillover: { label: "Peer GAT Graph Spillover", group: "Network & Alternative", min: -1, max: 1 },
-    smart_money_divergence_pos: { label: "Smart Money Div (+) Pos", group: "Network & Alternative", min: 0, max: 1 },
-    smart_money_divergence_neg: { label: "Smart Money Div (-) Neg", group: "Network & Alternative", min: 0, max: 1 },
+    smart_money_divergence_pos: { label: "Smart Money Div (+) Pos", group: "Network & Alternative", min: -1, max: 1 },
+    smart_money_divergence_neg: { label: "Smart Money Div (-) Neg", group: "Network & Alternative", min: -1, max: 1 },
   };
 
   function getBarWidth(val: number, min: number, max: number): { width: string; isPositive: boolean } {
@@ -249,11 +267,11 @@
         <div class="flex flex-col justify-between">
           <span class="text-2xs text-[#5E6D82]">EXPECTED GROWTH g(f)</span>
           <div class="flex items-baseline gap-1 mt-1 font-mono">
-            <span class="text-sm font-bold text-[#00FF66]">+{expectedGrowthRate}%</span>
-            <span class="text-2xs text-[#5E6D82]">ann.</span>
+            <span class="text-sm font-bold text-[#00FF66]">+{expectedPortfolioGrowth}%</span>
+            <span class="text-2xs text-[#5E6D82]">port. ann.</span>
           </div>
-          <div class="text-2xs text-[#5E6D82] font-mono">
-            Friction: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong> | &kappa;: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}</strong>
+          <div class="text-3xs text-[#5E6D82] font-mono truncate" title="Per-sleeve standalone capital drift: +{expectedSleeveGrowth}% ann.">
+            Sleeve: <strong class="text-[#00D2FF]">+{expectedSleeveGrowth}%</strong> | Fric: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong>
           </div>
         </div>
       </div>
@@ -271,7 +289,7 @@
     </div>
 
     <!-- Factor Ranks Breakdown Table (Fully unclipped with min-h-0 and smooth scrolling) -->
-    <div class="flex-1 min-h-0 flex flex-col bg-[#06090F] border border-[#172033] rounded overflow-hidden">
+    <div class="flex-1 min-h-0 flex flex-col bg-[#06090F] border border-[#172033] rounded overflow-hidden relative">
       <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] text-2xs font-bold text-[#5E6D82] border-b border-[#172033] shrink-0">
         <span class="w-1/3">ALPHA FACTOR</span>
         <span class="w-1/4">CATEGORY</span>
@@ -279,10 +297,9 @@
         <span class="w-1/4 pl-4">NORMALIZED RANK / DISPERSION</span>
       </div>
 
-      <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-2">
+      <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-8">
         {#each Object.entries(signal.signal_breakdown) as [key, val]}
           {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
-          {@const bar = getBarWidth(val, meta.min, meta.max)}
           <div class="flex items-center justify-between px-3 py-[3px] text-2xs hover:bg-[#0C111B] transition-colors">
             <span class="w-1/3 font-semibold text-[#E6EDF5] truncate" title={meta.label}>
               {meta.label}
@@ -294,37 +311,29 @@
               {val >= 0 ? "+" : ""}{val.toFixed(2)}
             </span>
 
-            <!-- Horizontal rank meter -->
+            <!-- Zero-centered diverging rank meter (Uniform center anchor) -->
             <div class="w-1/4 pl-4 flex items-center">
-              {#if meta.min < 0}
-                <!-- Zero-centered meter -->
-                <div class="w-full h-2 bg-[#121824] rounded flex relative">
-                  <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#5E6D82]/50"></div>
-                  {#if val >= 0}
-                    <div
-                      style="left: 50%; width: {Math.min(50, (val / meta.max) * 50)}%"
-                      class="absolute top-0 bottom-0 bg-[#00FF66] rounded-r"
-                    ></div>
-                  {:else}
-                    <div
-                      style="right: 50%; width: {Math.min(50, (Math.abs(val) / Math.abs(meta.min)) * 50)}%"
-                      class="absolute top-0 bottom-0 bg-[#FF3344] rounded-l"
-                    ></div>
-                  {/if}
-                </div>
-              {:else}
-                <!-- 0 to 1 meter -->
-                <div class="w-full h-2 bg-[#121824] rounded overflow-hidden">
+              <div class="w-full h-2 bg-[#121824] rounded flex relative">
+                <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#5E6D82]/50"></div>
+                {#if val >= 0}
                   <div
-                    style="width: {bar.width}"
-                    class="h-full bg-[#00D2FF]"
+                    style="left: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
+                    class="absolute top-0 bottom-0 {key.includes('smart_money') ? 'bg-[#00D2FF]' : 'bg-[#00FF66]'} rounded-r"
                   ></div>
-                </div>
-              {/if}
+                {:else}
+                  <div
+                    style="right: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
+                    class="absolute top-0 bottom-0 bg-[#FF3344] rounded-l"
+                  ></div>
+                {/if}
+              </div>
             </div>
           </div>
         {/each}
       </div>
+
+      <!-- Polished bottom fade gradient -->
+      <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#06090F] to-transparent"></div>
     </div>
   </div>
 </div>

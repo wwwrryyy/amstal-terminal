@@ -84,10 +84,15 @@
       <button
         onclick={cycleChannel}
         class="px-1.5 py-0.5 rounded text-2xs font-bold border transition-colors {channelColors[channel].bg} {channelColors[channel].text} {channelColors[channel].border}"
-        title="Color Channel Link"
+        title="Color Channel Link (Click to cycle)"
       >
         [{channel}]
       </button>
+      {#if channel !== "BLUE"}
+        <span class="px-1.5 py-0.5 rounded text-3xs font-mono font-bold bg-[#151D2E] text-[#8B98A5] border border-[#23314B]" title="Independent color channel - decoupled from master Blue ticker">
+          INDEPENDENT CHANNEL
+        </span>
+      {/if}
       <span class="font-bold text-[#E6EDF5]">FA &lt;GO&gt;</span>
       <span class="text-[#00D2FF] font-semibold">{ticker} US</span>
     </div>
@@ -145,22 +150,22 @@
 
   <!-- Table Container -->
   <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto bg-[#06090F]">
-    <table class="w-full text-2xs border-collapse font-mono select-text">
+    <table class="w-max min-w-full text-2xs border-collapse font-mono select-text">
       <!-- Period / SEC EDGAR Headers -->
       <thead>
         <tr class="bg-[#090D16] text-[#5E6D82] border-b border-[#172033] sticky top-0 z-10">
-          <th class="p-2 text-left sticky left-0 bg-[#090D16] z-20 min-w-[180px] border-r border-[#172033]">
+          <th class="p-2 text-left sticky left-0 bg-[#090D16] z-20 min-w-[170px] border-r border-[#172033]">
             FINANCIAL METRIC
           </th>
           {#each lakehouse.filings as f}
-            <th class="p-2 text-right min-w-[95px]">
+            <th class="px-3 py-1.5 text-right min-w-[85px] border-r border-[#172033]/40">
               <div class="font-bold text-[#E6EDF5]">{f.period}</div>
               <button
                 onclick={() => (selectedFiling = f)}
-                class="text-3xs text-[#8B98A5] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[105px]"
+                class="text-3xs text-[#7A8B9E] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[85px] ml-auto text-right"
                 title={`Click for EDGAR Filing Metadata\nFiled: ${f.filed_date}\nPeriod End: ${f.period_end_date}\nAccession: ${f.accession_number}`}
               >
-                {f.accession_number}
+                10-K • {f.filed_date.slice(2, 7)}
               </button>
             </th>
           {/each}
@@ -177,7 +182,7 @@
             </td>
             {#each lakehouse.filings as f}
               {@const val = row.values[f.period]}
-              <td class="p-1.5 text-right font-mono {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
+              <td class="px-3 py-1.5 text-right font-mono border-r border-[#172033]/30 {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
                 {formatValue(val, row.format)}
               </td>
             {/each}

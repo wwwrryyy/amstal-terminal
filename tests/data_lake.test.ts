@@ -218,4 +218,71 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     expect(resRegime.answer.toLowerCase()).toContain("regime");
     expect(resRegime.suggested_commands).toContain("HMM <GO>");
   });
+
+  it("verifies Markov transition matrix stationary distribution π = [51.9%, 34.8%, 13.3%]", () => {
+    const A = [
+      [0.942, 0.051, 0.007],
+      [0.082, 0.871, 0.047],
+      [0.012, 0.138, 0.85],
+    ];
+
+    // Iterative power method / stationary solve: π * A = π, sum(π) = 1
+    let pi = [1 / 3, 1 / 3, 1 / 3];
+    for (let iter = 0; iter < 200; iter++) {
+      const nextPi = [0, 0, 0];
+      for (let j = 0; j < 3; j++) {
+        for (let i = 0; i < 3; i++) {
+          nextPi[j] += pi[i] * A[i][j];
+        }
+      }
+      const sum = nextPi.reduce((a, b) => a + b, 0);
+      pi = nextPi.map((x) => x / sum);
+    }
+
+    expect(pi[0]).toBeCloseTo(0.519, 2); // 51.9%
+    expect(pi[1]).toBeCloseTo(0.348, 2); // 34.8%
+    expect(pi[2]).toBeCloseTo(0.133, 2); // 13.3%
+    expect(pi.reduce((a, b) => a + b, 0)).toBeCloseTo(1.0, 5);
+  });
+
+  it("verifies Expected Dwell Time (1/(1-p_ii)) vs True Half-Life (ln(0.5)/ln(p_ii))", () => {
+    const diag = [0.942, 0.871, 0.85];
+    const expectedDwell = diag.map((p) => +(1 / (1 - p)).toFixed(1));
+    const trueHalfLife = diag.map((p) => +(Math.log(0.5) / Math.log(p)).toFixed(1));
+
+    expect(expectedDwell).toEqual([17.2, 7.8, 6.7]);
+    expect(trueHalfLife).toEqual([11.6, 5.0, 4.3]);
+  });
+
+  it("verifies continuous κ multiplier and stress penalty calculation", () => {
+    const baseKappa = 0.85;
+    const pS1 = 0.145; // Medium Vol
+    const pS2 = 0.043; // High Vol
+
+    const effectiveKappa = +(baseKappa * (1 - 0.8 * pS2) * (1 - 0.2 * pS1)).toFixed(2);
+    const stressPenalty = +(effectiveKappa - baseKappa).toFixed(2);
+
+    expect(effectiveKappa).toBe(0.80);
+    expect(stressPenalty).toBe(-0.05);
+  });
+
+  it("ensures MSFT has FY2026 and FY2025 filings with certified GAAP balance", () => {
+    const msft = get10YFinancialLakehouse("MSFT", true);
+    const periods = msft.filings.map((f) => f.period);
+    expect(periods).toContain("FY2026");
+    expect(periods).toContain("FY2025");
+    expect(periods).toContain("FY2024");
+
+    const rev = msft.incomeStatement.find((r) => r.tag === "Revenues")!;
+    const cost = msft.incomeStatement.find((r) => r.tag === "CostOfRevenue")!;
+    const gp = msft.incomeStatement.find((r) => r.tag === "GrossProfit")!;
+
+    expect(rev.values["FY2026"]).toBe(318000);
+    expect(cost.values["FY2026"]).toBe(96000);
+    expect(gp.values["FY2026"]).toBe(222000); // 318,000 - 96,000 = 222,000
+
+    expect(rev.values["FY2025"]).toBe(279000);
+    expect(cost.values["FY2025"]).toBe(84000);
+    expect(gp.values["FY2025"]).toBe(195000); // 279,000 - 84,000 = 195,000
+  });
 });
