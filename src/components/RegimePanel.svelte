@@ -6,9 +6,11 @@
   let {
     isMaximized = false,
     onToggleMaximize,
+    onSwitchFunction,
   }: {
     isMaximized?: boolean;
     onToggleMaximize?: () => void;
+    onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
 
   let regime = $state<MacroRegimeData>(ipcService.macroRegime);
@@ -106,6 +108,16 @@
     </div>
 
     <div class="flex items-center gap-2">
+      {#if onSwitchFunction}
+        <div class="flex items-center gap-1 text-2xs">
+          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
+          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
+          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
+          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
+          <button onclick={() => onSwitchFunction("SPLC")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">SPLC</button>
+        </div>
+      {/if}
+
       <div class="flex items-center gap-1.5 text-2xs">
         <span class="text-[#64748B]">FILTERED CONFIDENCE:</span>
         <span class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] font-mono font-bold">

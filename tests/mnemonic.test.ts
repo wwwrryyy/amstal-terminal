@@ -23,12 +23,24 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
   });
 
   it("parses standalone mnemonics: HMM <GO>, PORT <GO>, GP <GO>, FA <GO>", () => {
-    for (const m of ["HMM", "PORT", "GP", "FA", "GRID", "ALL", "HELP", "TOP"]) {
+    for (const m of ["HMM", "PORT", "GP", "FA", "DES", "SPLC", "GRID", "ALL", "HELP", "TOP"]) {
       const res = parse_mnemonic_command(`${m} <GO>`);
       expect(res.is_valid).toBe(true);
       expect(res.has_go).toBe(true);
       expect(res.mnemonic).toBe(m);
     }
+  });
+
+  it("parses Tier 1/2 commands: NVDA DES <GO> and CRWD SPLC <GO>", () => {
+    const resDes = parse_mnemonic_command("NVDA US <EQUITY> DES <GO>");
+    expect(resDes.is_valid).toBe(true);
+    expect(resDes.identifier).toBe("NVDA");
+    expect(resDes.mnemonic).toBe("DES");
+
+    const resSplc = parse_mnemonic_command("CRWD SPLC <GO>");
+    expect(resSplc.is_valid).toBe(true);
+    expect(resSplc.identifier).toBe("CRWD");
+    expect(resSplc.mnemonic).toBe("SPLC");
   });
 
   it("parses commands without trailing <GO>", () => {

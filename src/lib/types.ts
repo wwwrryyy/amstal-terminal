@@ -124,3 +124,55 @@ export interface FinancialFilingMetadata {
   is_restated: boolean;
   restatement_delta_notes?: string;
 }
+
+export type ColorChannel = "BLUE" | "AMBER" | "GREEN" | "RED" | "UNLINKED";
+
+export interface SecurityMasterData {
+  ticker: string;
+  company_name: string;
+  primary_exchange: string;
+  cik: string;
+  figi: string;
+  gics_sector: string;
+  gics_sub_industry: string;
+  beta_market_60d: number;
+  beta_sector_60d: number;
+  adv_30d_shares: number;
+  market_cap_billions: number;
+  pe_ratio_ltm: number;
+  pe_forward?: number;
+  dividend_yield_pct: number;
+  high_52w: number;
+  low_52w: number;
+  business_summary: string;
+  headquarters: string;
+  ceo: string;
+  employees: number;
+}
+
+export type PeerNodeRole = "TARGET" | "GICS_PEER" | "LEAD_LAG" | "SECTOR_ETF";
+
+export interface PeerGraphNode {
+  id: string;
+  role: PeerNodeRole;
+  role_code: number;
+  label: string;
+  cross_corr_5d?: number;
+  beta_market?: number;
+}
+
+export interface PeerGraphEdge {
+  source: string;
+  target: string;
+  attention_weight: number;
+  lead_days?: number;
+}
+
+export interface PeerGraphData {
+  target_ticker: string;
+  nodes: PeerGraphNode[];
+  edges: PeerGraphEdge[];
+  gat_attention_entropy?: number;
+  top_spillover_contributor?: string;
+}
+

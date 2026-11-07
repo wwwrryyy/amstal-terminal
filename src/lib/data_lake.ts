@@ -580,3 +580,317 @@ export function get10YFinancialLakehouse(
     filings,
   };
 }
+
+export function getSecurityMaster(ticker: string): import("./types").SecurityMasterData {
+  const t = ticker.toUpperCase();
+  const profiles: Record<string, Partial<import("./types").SecurityMasterData>> = {
+    NVDA: {
+      company_name: "NVIDIA Corporation",
+      primary_exchange: "NASDAQ GS",
+      cik: "0001045810",
+      figi: "BBG000BBJQV0",
+      gics_sector: "Information Technology",
+      gics_sub_industry: "Semiconductors",
+      beta_market_60d: 1.72,
+      beta_sector_60d: 1.15,
+      adv_30d_shares: 48200000,
+      market_cap_billions: 3412.5,
+      pe_ratio_ltm: 54.2,
+      pe_forward: 32.8,
+      dividend_yield_pct: 0.03,
+      high_52w: 140.76,
+      low_52w: 45.11,
+      business_summary:
+        "NVIDIA Corporation designs graphics processing units (GPUs) and full-stack accelerated computing platforms for enterprise artificial intelligence, hyperscale data centers, autonomous machines, robotics, and high-performance scientific simulations.",
+      headquarters: "Santa Clara, California, USA",
+      ceo: "Jensen Huang",
+      employees: 29600,
+    },
+    AAPL: {
+      company_name: "Apple Inc.",
+      primary_exchange: "NASDAQ GS",
+      cik: "0000320193",
+      figi: "BBG000B9XRY4",
+      gics_sector: "Information Technology",
+      gics_sub_industry: "Technology Hardware, Storage & Peripherals",
+      beta_market_60d: 1.08,
+      beta_sector_60d: 0.88,
+      adv_30d_shares: 55400000,
+      market_cap_billions: 3420.0,
+      pe_ratio_ltm: 34.1,
+      pe_forward: 29.5,
+      dividend_yield_pct: 0.44,
+      high_52w: 237.23,
+      low_52w: 164.08,
+      business_summary:
+        "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories, and sells a variety of related services including Apple Music, iCloud, Apple Pay, and Apple TV+.",
+      headquarters: "Cupertino, California, USA",
+      ceo: "Tim Cook",
+      employees: 161000,
+    },
+    MSFT: {
+      company_name: "Microsoft Corporation",
+      primary_exchange: "NASDAQ GS",
+      cik: "0000789019",
+      figi: "BBG000BPH459",
+      gics_sector: "Information Technology",
+      gics_sub_industry: "Systems Software",
+      beta_market_60d: 1.18,
+      beta_sector_60d: 0.95,
+      adv_30d_shares: 21800000,
+      market_cap_billions: 3120.8,
+      pe_ratio_ltm: 36.2,
+      pe_forward: 30.1,
+      dividend_yield_pct: 0.71,
+      high_52w: 468.35,
+      low_52w: 366.5,
+      business_summary:
+        "Microsoft Corporation develops and supports software, services, devices and solutions worldwide. The Productivity and Business Processes segment offers Office, Exchange, SharePoint, Teams, Office 365 Security and Compliance, Microsoft Viva, and Skype for Business.",
+      headquarters: "Redmond, Washington, USA",
+      ceo: "Satya Nadella",
+      employees: 221000,
+    },
+    CRWD: {
+      company_name: "CrowdStrike Holdings, Inc.",
+      primary_exchange: "NASDAQ GS",
+      cik: "0001535527",
+      figi: "BBG00K1314T7",
+      gics_sector: "Information Technology",
+      gics_sub_industry: "Cybersecurity Software",
+      beta_market_60d: 1.48,
+      beta_sector_60d: 1.32,
+      adv_30d_shares: 4100000,
+      market_cap_billions: 74.8,
+      pe_ratio_ltm: 68.4,
+      pe_forward: 42.1,
+      dividend_yield_pct: 0.0,
+      high_52w: 398.33,
+      low_52w: 200.81,
+      business_summary:
+        "CrowdStrike Holdings provides cloud-delivered protection across endpoints, cloud workloads, identity, and data via its AI-native Falcon platform. Sells subscriptions to its Falcon platform and cloud modules.",
+      headquarters: "Austin, Texas, USA",
+      ceo: "George Kurtz",
+      employees: 7925,
+    },
+    SPY: {
+      company_name: "SPDR S&P 500 ETF Trust",
+      primary_exchange: "NYSE Arca",
+      cik: "0000884394",
+      figi: "BBG000BDTBL9",
+      gics_sector: "Broad Index ETF",
+      gics_sub_industry: "Large Cap Equity ETF",
+      beta_market_60d: 1.0,
+      beta_sector_60d: 1.0,
+      adv_30d_shares: 62000000,
+      market_cap_billions: 580.4,
+      pe_ratio_ltm: 27.5,
+      pe_forward: 22.8,
+      dividend_yield_pct: 1.22,
+      high_52w: 585.2,
+      low_52w: 432.1,
+      business_summary:
+        "The SPDR S&P 500 ETF Trust seeks to provide investment results that correspond generally to the price and yield performance of the S&P 500 Index. S&P 500 includes 500 leading companies and covers approximately 80% of available market capitalization.",
+      headquarters: "Boston, Massachusetts, USA",
+      ceo: "State Street Global Advisors",
+      employees: 0,
+    },
+    TSLA: {
+      company_name: "Tesla, Inc.",
+      primary_exchange: "NASDAQ GS",
+      cik: "0001318605",
+      figi: "BBG000N9MNX3",
+      gics_sector: "Consumer Discretionary",
+      gics_sub_industry: "Automobile Manufacturers",
+      beta_market_60d: 2.12,
+      beta_sector_60d: 1.85,
+      adv_30d_shares: 78500000,
+      market_cap_billions: 795.0,
+      pe_ratio_ltm: 72.5,
+      pe_forward: 58.0,
+      dividend_yield_pct: 0.0,
+      high_52w: 271.0,
+      low_52w: 138.8,
+      business_summary:
+        "Tesla, Inc. designs, develops, manufactures, sells, and leases electric vehicles, energy storage systems, and solar panels, and offers services related to its products including full self-driving capability.",
+      headquarters: "Austin, Texas, USA",
+      ceo: "Elon Musk",
+      employees: 140473,
+    },
+  };
+
+  const p = profiles[t] || {
+    company_name: `${t} Corporation`,
+    primary_exchange: "NASDAQ GS",
+    cik: "0001000000",
+    figi: `BBG000${t}001`,
+    gics_sector: "Information Technology",
+    gics_sub_industry: "Technology",
+    beta_market_60d: 1.2,
+    beta_sector_60d: 1.05,
+    adv_30d_shares: 12000000,
+    market_cap_billions: 120.0,
+    pe_ratio_ltm: 28.0,
+    pe_forward: 24.0,
+    dividend_yield_pct: 0.5,
+    high_52w: 200.0,
+    low_52w: 120.0,
+    business_summary: `${t} operates in enterprise technology markets delivering software and hardware systems.`,
+    headquarters: "United States",
+    ceo: "Executive Officer",
+    employees: 15000,
+  };
+
+  return {
+    ticker: t,
+    company_name: p.company_name ?? `${t} Inc.`,
+    primary_exchange: p.primary_exchange ?? "NASDAQ",
+    cik: p.cik ?? "0001045810",
+    figi: p.figi ?? `BBG000${t}001`,
+    gics_sector: p.gics_sector ?? "Information Technology",
+    gics_sub_industry: p.gics_sub_industry ?? "Technology",
+    beta_market_60d: p.beta_market_60d ?? 1.2,
+    beta_sector_60d: p.beta_sector_60d ?? 1.0,
+    adv_30d_shares: p.adv_30d_shares ?? 20000000,
+    market_cap_billions: p.market_cap_billions ?? 150.0,
+    pe_ratio_ltm: p.pe_ratio_ltm ?? 30.0,
+    pe_forward: p.pe_forward ?? 25.0,
+    dividend_yield_pct: p.dividend_yield_pct ?? 0.0,
+    high_52w: p.high_52w ?? 200.0,
+    low_52w: p.low_52w ?? 100.0,
+    business_summary: p.business_summary ?? `${t} operates enterprise technology platforms.`,
+    headquarters: p.headquarters ?? "United States",
+    ceo: p.ceo ?? "Executive",
+    employees: p.employees ?? 10000,
+  };
+}
+
+export function getPeerGraph(ticker: string): import("./types").PeerGraphData {
+  const t = ticker.toUpperCase();
+
+  const peerMaps: Record<
+    string,
+    {
+      gics: string[];
+      leadLag: Array<{ sym: string; corr: number }>;
+      etf: string;
+    }
+  > = {
+    NVDA: {
+      gics: ["AMD", "AVGO", "QCOM", "INTC"],
+      leadLag: [
+        { sym: "TSM", corr: 0.68 },
+        { sym: "ASML", corr: 0.61 },
+        { sym: "MSFT", corr: 0.54 },
+        { sym: "AMZN", corr: 0.51 },
+      ],
+      etf: "XLK",
+    },
+    AAPL: {
+      gics: ["MSFT", "GOOGL", "DELL", "HPQ"],
+      leadLag: [
+        { sym: "TSM", corr: 0.64 },
+        { sym: "FOXCONN", corr: 0.58 },
+        { sym: "QCOM", corr: 0.52 },
+        { sym: "CRWD", corr: 0.46 },
+      ],
+      etf: "XLK",
+    },
+    CRWD: {
+      gics: ["PANW", "FTNT", "NET", "ZS"],
+      leadLag: [
+        { sym: "MSFT", corr: 0.62 },
+        { sym: "AMZN", corr: 0.55 },
+        { sym: "DDOG", corr: 0.52 },
+        { sym: "SNOW", corr: 0.48 },
+      ],
+      etf: "XLK",
+    },
+    MSFT: {
+      gics: ["ORCL", "ADBE", "CRM", "SAP"],
+      leadLag: [
+        { sym: "NVDA", corr: 0.66 },
+        { sym: "AMZN", corr: 0.63 },
+        { sym: "GOOGL", corr: 0.59 },
+        { sym: "META", corr: 0.52 },
+      ],
+      etf: "XLK",
+    },
+    TSLA: {
+      gics: ["RIVN", "LCID", "F", "GM"],
+      leadLag: [
+        { sym: "BYD", corr: 0.58 },
+        { sym: "CATL", corr: 0.54 },
+        { sym: "NVDA", corr: 0.49 },
+        { sym: "ALB", corr: 0.44 },
+      ],
+      etf: "XLY",
+    },
+    SPY: {
+      gics: ["QQQ", "IWM", "DIA", "VOO"],
+      leadLag: [
+        { sym: "TLT", corr: -0.45 },
+        { sym: "HYG", corr: 0.72 },
+        { sym: "GLD", corr: 0.32 },
+        { sym: "EEM", corr: 0.58 },
+      ],
+      etf: "SPY",
+    },
+  };
+
+  const map = peerMaps[t] || {
+    gics: ["PEER1", "PEER2", "PEER3", "PEER4"],
+    leadLag: [
+      { sym: "LL1", corr: 0.58 },
+      { sym: "LL2", corr: 0.52 },
+      { sym: "LL3", corr: 0.48 },
+      { sym: "LL4", corr: 0.44 },
+    ],
+    etf: "XLK",
+  };
+
+  // Node 0: Target
+  const nodes: import("./types").PeerGraphNode[] = [
+    { id: t, role: "TARGET", role_code: 0.0, label: t, beta_market: 1.25 },
+  ];
+
+  // Nodes 1..4: GICS Peers
+  map.gics.forEach((sym) => {
+    nodes.push({ id: sym, role: "GICS_PEER", role_code: 0.33, label: sym, beta_market: 1.15 });
+  });
+
+  // Nodes 5..8: Lead-Lag Peers
+  map.leadLag.forEach((item) => {
+    nodes.push({
+      id: item.sym,
+      role: "LEAD_LAG",
+      role_code: 0.66,
+      label: item.sym,
+      cross_corr_5d: item.corr,
+      beta_market: 1.1,
+    });
+  });
+
+  // Node 9: Sector ETF
+  nodes.push({ id: map.etf, role: "SECTOR_ETF", role_code: 1.0, label: map.etf, beta_market: 1.0 });
+
+  // Edges with attention weights
+  const edges: import("./types").PeerGraphEdge[] = [
+    { source: t, target: map.gics[0], attention_weight: 0.165 },
+    { source: t, target: map.gics[1], attention_weight: 0.142 },
+    { source: t, target: map.gics[2], attention_weight: 0.118 },
+    { source: t, target: map.gics[3], attention_weight: 0.085 },
+    { source: map.leadLag[0].sym, target: t, attention_weight: 0.185, lead_days: 5 },
+    { source: map.leadLag[1].sym, target: t, attention_weight: 0.134, lead_days: 5 },
+    { source: map.leadLag[2].sym, target: t, attention_weight: 0.098, lead_days: 5 },
+    { source: map.leadLag[3].sym, target: t, attention_weight: 0.073, lead_days: 5 },
+    { source: map.etf, target: t, attention_weight: 0.22 },
+  ];
+
+  return {
+    target_ticker: t,
+    nodes,
+    edges,
+    gat_attention_entropy: 1.84,
+    top_spillover_contributor: map.leadLag[0].sym,
+  };
+}

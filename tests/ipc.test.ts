@@ -73,6 +73,18 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     expect(res.result.filtered_probabilities.low_volatility).toBeGreaterThan(0);
   });
 
+  it("handles get_security_master and get_peer_graph JSON-RPC requests", async () => {
+    const smRes = await ipc.executeJsonRpc("get_security_master", { ticker: "NVDA" });
+    expect(smRes.jsonrpc).toBe("2.0");
+    expect(smRes.result.ticker).toBe("NVDA");
+    expect(smRes.result.cik).toBe("0001045810");
+
+    const pgRes = await ipc.executeJsonRpc("get_peer_graph", { ticker: "NVDA" });
+    expect(pgRes.jsonrpc).toBe("2.0");
+    expect(pgRes.result.target_ticker).toBe("NVDA");
+    expect(pgRes.result.nodes.length).toBe(10);
+  });
+
   it("returns -32601 error for unknown methods", async () => {
     const res = await ipc.executeJsonRpc("unknown_method_xyz");
     expect(res.jsonrpc).toBe("2.0");

@@ -6,6 +6,7 @@ export const STANDALONE_MNEMONICS = new Set([
   "GP",
   "FA",
   "DES",
+  "SPLC",
   "HELP",
   "TOP",
   "GRID",

@@ -4,8 +4,10 @@ import {
   type ParsedMnemonicCommand,
   type QARESignalFrame,
   type TickData,
+  type SecurityMasterData,
+  type PeerGraphData,
 } from "./types";
-import { createDefaultSignalFrame, SAMPLE_TICKERS } from "./data_lake";
+import { createDefaultSignalFrame, getSecurityMaster, getPeerGraph, SAMPLE_TICKERS } from "./data_lake";
 import { parse_mnemonic_command } from "./mnemonic";
 
 export type ConnectionState = "CONNECTED" | "CONNECTING" | "SIMULATED_FALLBACK" | "DISCONNECTED";
@@ -427,6 +429,26 @@ export class IpcClientService {
         };
       }
 
+      case "get_security_master": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = getSecurityMaster(ticker);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
+      case "get_peer_graph": {
+        const ticker = (params.ticker || "SPY").toUpperCase();
+        const data = getPeerGraph(ticker);
+        return {
+          jsonrpc: "2.0",
+          result: data as any,
+          id,
+        };
+      }
+
       default:
         return {
           jsonrpc: "2.0",
@@ -468,6 +490,14 @@ export class IpcClientService {
       this.ticks.set(t, tick);
     }
     return tick;
+  }
+
+  public getSecurityMaster(ticker: string): SecurityMasterData {
+    return getSecurityMaster(ticker);
+  }
+
+  public getPeerGraph(ticker: string): PeerGraphData {
+    return getPeerGraph(ticker);
   }
 
   public destroy(): void {

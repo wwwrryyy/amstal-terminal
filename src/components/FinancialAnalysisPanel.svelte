@@ -1,16 +1,37 @@
 <script lang="ts">
   import { get10YFinancialLakehouse } from "../lib/data_lake";
-  import type { FinancialFilingMetadata, FinancialMetricRow } from "../lib/types";
+  import type { ColorChannel, FinancialFilingMetadata, FinancialMetricRow } from "../lib/types";
 
   let {
     ticker = "NVDA",
+    channel = "GREEN",
     isMaximized = false,
     onToggleMaximize,
+    onChannelChange,
+    onSwitchFunction,
   }: {
     ticker?: string;
+    channel?: ColorChannel;
     isMaximized?: boolean;
     onToggleMaximize?: () => void;
+    onChannelChange?: (ch: ColorChannel) => void;
+    onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
+
+  const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
+    BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
+    AMBER: { bg: "bg-[#FF9E00]/20", text: "text-[#FF9E00]", border: "border-[#FF9E00]/40" },
+    GREEN: { bg: "bg-[#00E676]/20", text: "text-[#00E676]", border: "border-[#00E676]/40" },
+    RED: { bg: "bg-[#FF3366]/20", text: "text-[#FF3366]", border: "border-[#FF3366]/40" },
+    UNLINKED: { bg: "bg-[#64748B]/20", text: "text-[#64748B]", border: "border-[#64748B]/40" },
+  };
+
+  function cycleChannel() {
+    if (!onChannelChange) return;
+    const channels: ColorChannel[] = ["BLUE", "AMBER", "GREEN", "RED", "UNLINKED"];
+    const nextIdx = (channels.indexOf(channel) + 1) % channels.length;
+    onChannelChange(channels[nextIdx]);
+  }
 
   type StatementType = "INCOME" | "BALANCE" | "CASHFLOW" | "RATIOS";
 
@@ -59,12 +80,28 @@
   <!-- Panel Subheader -->
   <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-xs">
     <div class="flex items-center gap-2">
+      <!-- Color Channel Link Pill -->
+      <button
+        onclick={cycleChannel}
+        class="px-1.5 py-0.5 rounded text-2xs font-bold border transition-colors {channelColors[channel].bg} {channelColors[channel].text} {channelColors[channel].border}"
+        title="Color Channel Link"
+      >
+        [{channel}]
+      </button>
       <span class="font-bold text-[#E2E8F0]">FA &lt;GO&gt;</span>
       <span class="text-[#00D2FF] font-semibold">{ticker} US</span>
       <span class="text-[#64748B]">10Y POINT-IN-TIME XBRL LAKEHOUSE</span>
     </div>
 
     <div class="flex items-center gap-2">
+      {#if onSwitchFunction}
+        <div class="flex items-center gap-1 text-2xs">
+          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
+          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
+          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
+          <button onclick={() => onSwitchFunction("SPLC")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">SPLC</button>
+        </div>
+      {/if}
       <!-- Statement Selector -->
       <div class="flex items-center bg-[#0A0E17] rounded border border-[#1E2638] p-0.5 text-2xs">
         <button

@@ -4,6 +4,8 @@ import {
   get10YFinancialLakehouse,
   getFilingMetadata,
   createDefaultSignalFrame,
+  getSecurityMaster,
+  getPeerGraph,
 } from "../src/lib/data_lake";
 
 describe("Data Lake & Quantitative Signal Provider", () => {
@@ -63,5 +65,47 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     expect(restatedRev).toBeDefined();
     // In restated mode, restateShift modifies values
     expect(restatedRev).toBeGreaterThan(pitRev!);
+  });
+
+  it("loads Security Master factsheet for DES <GO>", () => {
+    const sm = getSecurityMaster("NVDA");
+    expect(sm.ticker).toBe("NVDA");
+    expect(sm.company_name).toBe("NVIDIA Corporation");
+    expect(sm.primary_exchange).toContain("NASDAQ");
+    expect(sm.cik).toBe("0001045810");
+    expect(sm.beta_market_60d).toBeGreaterThan(0.5);
+    expect(sm.market_cap_billions).toBeGreaterThan(100.0);
+    expect(sm.business_summary.length).toBeGreaterThan(50);
+  });
+
+  it("builds 10-Node dynamic Peer GAT graph for SPLC <GO>", () => {
+    const pg = getPeerGraph("NVDA");
+    expect(pg.target_ticker).toBe("NVDA");
+    expect(pg.nodes.length).toBe(10);
+    expect(pg.edges.length).toBeGreaterThanOrEqual(9);
+
+    // Node 0 is Target
+    expect(pg.nodes[0].role).toBe("TARGET");
+    expect(pg.nodes[0].role_code).toBe(0.0);
+
+    // GICS peers (roles = 0.33)
+    const gicsPeers = pg.nodes.filter((n) => n.role === "GICS_PEER");
+    expect(gicsPeers.length).toBe(4);
+    for (const p of gicsPeers) {
+      expect(p.role_code).toBe(0.33);
+    }
+
+    // Lead-lag peers (roles = 0.66)
+    const leadLagPeers = pg.nodes.filter((n) => n.role === "LEAD_LAG");
+    expect(leadLagPeers.length).toBe(4);
+    for (const p of leadLagPeers) {
+      expect(p.role_code).toBe(0.66);
+      expect(p.cross_corr_5d).toBeDefined();
+    }
+
+    // Sector ETF (role = 1.0)
+    const etf = pg.nodes.find((n) => n.role === "SECTOR_ETF");
+    expect(etf).toBeDefined();
+    expect(etf?.role_code).toBe(1.0);
   });
 });
