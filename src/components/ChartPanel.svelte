@@ -93,14 +93,14 @@
       width: clientWidth || 600,
       height: clientHeight || 380,
       layout: {
-        background: { type: ColorType.Solid, color: "#111622" },
-        textColor: "#64748B",
+        background: { type: ColorType.Solid, color: "#06090F" },
+        textColor: "#5E6D82",
         fontFamily: "'JetBrains Mono', 'SF Mono', Consolas, monospace",
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "#182030", style: LineStyle.Dotted },
-        horzLines: { color: "#182030", style: LineStyle.Dotted },
+        vertLines: { color: "#121824", style: LineStyle.Dotted },
+        horzLines: { color: "#121824", style: LineStyle.Dotted },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -108,24 +108,24 @@
           color: "#00D2FF",
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: "#182030",
+          labelBackgroundColor: "#121824",
         },
         horzLine: {
           color: "#00D2FF",
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: "#182030",
+          labelBackgroundColor: "#121824",
         },
       },
       rightPriceScale: {
-        borderColor: "#1E2638",
+        borderColor: "#172033",
         scaleMargins: {
           top: 0.12,
           bottom: 0.22,
         },
       },
       timeScale: {
-        borderColor: "#1E2638",
+        borderColor: "#172033",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -355,58 +355,49 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden">
   <!-- Panel Subheader / Toolstrip -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-xs">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-xs">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
         onclick={cycleChannel}
         class="px-1.5 py-0.5 rounded text-2xs font-bold border transition-colors {channelColors[channel].bg} {channelColors[channel].text} {channelColors[channel].border}"
-        title="Color Channel Link (Click to cycle BLUE, AMBER, GREEN, RED, UNLINKED)"
+        title="Color Channel Link"
       >
         [{channel}]
       </button>
       <span class="font-bold text-[#00D2FF]">GP &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">PRICE & ATR TRIPLE BARRIERS</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
 
       <!-- Live Tick Pill -->
-      <span class="ml-2 font-mono font-bold {currentTick.change >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+      <span class="ml-2 font-mono font-bold {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
         ${currentTick.price.toFixed(2)}
       </span>
-      <span class="text-2xs font-mono {currentTick.change >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+      <span class="text-2xs font-mono {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
         {currentTick.change >= 0 ? "+" : ""}{currentTick.change.toFixed(2)} ({currentTick.change_pct >= 0 ? "+" : ""}{currentTick.change_pct.toFixed(2)}%)
       </span>
     </div>
 
     <!-- Controls -->
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-          <button onclick={() => onSwitchFunction("SPLC")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">SPLC</button>
-        </div>
-      {/if}
       <!-- Timeframe selector -->
-      <div class="flex items-center bg-[#0A0E17] rounded border border-[#1E2638] p-0.5 text-2xs">
+      <div class="flex items-center bg-[#06090F] rounded border border-[#172033] p-0.5 text-2xs font-mono">
         <button
           onclick={() => handleTimeframeChange("1H")}
-          class="px-2 py-0.5 rounded transition-colors {timeframe === '1H' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {timeframe === '1H' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           1H
         </button>
         <button
           onclick={() => handleTimeframeChange("4H")}
-          class="px-2 py-0.5 rounded transition-colors {timeframe === '4H' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {timeframe === '4H' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           4H
         </button>
         <button
           onclick={() => handleTimeframeChange("1D")}
-          class="px-2 py-0.5 rounded transition-colors {timeframe === '1D' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {timeframe === '1D' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           1D
         </button>
@@ -415,14 +406,14 @@
       <!-- Overlays Toggles -->
       <button
         onclick={toggleBarriers}
-        class="px-2 py-0.5 text-2xs rounded border {showBarriers ? 'border-[#00E676]/40 bg-[#00E676]/10 text-[#00E676]' : 'border-[#1E2638] bg-[#0A0E17] text-[#64748B]'}"
+        class="px-2 py-0.5 text-2xs rounded border transition-colors {showBarriers ? 'border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66]' : 'border-[#172033] bg-[#06090F] text-[#5E6D82]'}"
       >
-        ATR BARRIERS
+        BARRIERS
       </button>
 
       <button
         onclick={toggleVolume}
-        class="px-2 py-0.5 text-2xs rounded border {showVolume ? 'border-[#00D2FF]/40 bg-[#00D2FF]/10 text-[#00D2FF]' : 'border-[#1E2638] bg-[#0A0E17] text-[#64748B]'}"
+        class="px-2 py-0.5 text-2xs rounded border transition-colors {showVolume ? 'border-[#00D2FF]/50 bg-[#00D2FF]/10 text-[#00D2FF]' : 'border-[#172033] bg-[#06090F] text-[#5E6D82]'}"
       >
         VOL
       </button>
@@ -430,7 +421,7 @@
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
           title={isMaximized ? "Restore 2x2 Grid" : "Maximize Panel"}
         >
           {isMaximized ? "RESTORE" : "MAX"}
@@ -440,48 +431,48 @@
   </div>
 
   <!-- Metric Badges Bar -->
-  <div class="flex items-center justify-between px-3 py-1 bg-[#111622] border-b border-[#1E2638]/70 text-2xs font-mono">
-    <div class="flex items-center gap-4 text-[#94A3B8]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#0C111B] border-b border-[#172033] text-2xs font-mono">
+    <div class="flex items-center gap-4 text-[#8B98A5]">
       <div>
-        <span class="text-[#64748B]">TP (Upper):</span>
-        <span class="text-[#00E676] font-bold">${currentSignal.execution_recommendation.dynamic_take_profit.toFixed(2)}</span>
+        <span class="text-[#5E6D82]">TP (Upper):</span>
+        <span class="text-[#00FF66] font-bold">${currentSignal.execution_recommendation.dynamic_take_profit.toFixed(2)}</span>
       </div>
       <div>
-        <span class="text-[#64748B]">ENTRY:</span>
+        <span class="text-[#5E6D82]">ENTRY:</span>
         <span class="text-[#00D2FF] font-bold">${currentSignal.execution_recommendation.entry_price.toFixed(2)}</span>
       </div>
       <div>
-        <span class="text-[#64748B]">SL (Lower):</span>
-        <span class="text-[#FF3366] font-bold">${currentSignal.execution_recommendation.dynamic_stop_loss.toFixed(2)}</span>
+        <span class="text-[#5E6D82]">SL (Lower):</span>
+        <span class="text-[#FF3344] font-bold">${currentSignal.execution_recommendation.dynamic_stop_loss.toFixed(2)}</span>
       </div>
       <div>
-        <span class="text-[#64748B]">R:R:</span>
-        <span class="text-[#FF9E00] font-bold">{currentSignal.execution_recommendation.reward_to_risk_ratio.toFixed(1)}x</span>
+        <span class="text-[#5E6D82]">R:R:</span>
+        <span class="text-[#FFB000] font-bold">{currentSignal.execution_recommendation.reward_to_risk_ratio.toFixed(1)}x</span>
       </div>
       <div>
-        <span class="text-[#64748B]">HORIZON:</span>
-        <span class="text-[#E2E8F0] font-bold">{currentSignal.horizon_days}D VERTICAL</span>
+        <span class="text-[#5E6D82]">HORIZON:</span>
+        <span class="text-[#E6EDF5] font-bold">{currentSignal.horizon_days}D VERTICAL</span>
       </div>
     </div>
 
     <!-- Candlestick hover crosshair details -->
     {#if hoverData}
-      <div class="flex items-center gap-2 text-[#64748B]">
-        <span>DATE: <strong class="text-[#E2E8F0]">{hoverData.time}</strong></span>
-        <span>O: <strong class="text-[#E2E8F0]">${hoverData.open.toFixed(2)}</strong></span>
-        <span>H: <strong class="text-[#00E676]">${hoverData.high.toFixed(2)}</strong></span>
-        <span>L: <strong class="text-[#FF3366]">${hoverData.low.toFixed(2)}</strong></span>
+      <div class="flex items-center gap-2 text-[#5E6D82]">
+        <span>DATE: <strong class="text-[#E6EDF5]">{hoverData.time}</strong></span>
+        <span>O: <strong class="text-[#E6EDF5]">${hoverData.open.toFixed(2)}</strong></span>
+        <span>H: <strong class="text-[#00FF66]">${hoverData.high.toFixed(2)}</strong></span>
+        <span>L: <strong class="text-[#FF3344]">${hoverData.low.toFixed(2)}</strong></span>
         <span>C: <strong class="text-[#00D2FF]">${hoverData.close.toFixed(2)}</strong></span>
       </div>
     {:else}
-      <div class="text-[#64748B] text-2xs">
-        CONFLATION: 100ms | ATR TRIPLE BARRIER v1.3
+      <div class="text-[#5E6D82] text-2xs">
+        100ms CONFLATION | ATR TRIPLE BARRIERS
       </div>
     {/if}
   </div>
 
   <!-- Lightweight Charts canvas container -->
-  <div class="flex-1 relative w-full h-full min-h-[180px]">
+  <div class="flex-1 relative w-full h-full min-h-[180px] bg-[#06090F]">
     <div bind:this={chartContainer} class="absolute inset-0 w-full h-full"></div>
   </div>
 </div>

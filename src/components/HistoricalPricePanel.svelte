@@ -36,9 +36,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden text-xs">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs">
   <!-- Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033]">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -48,25 +48,15 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#FF9E00]">HP &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">HISTORICAL PRICES & RETURN DECOMPOSITION</span>
+      <span class="font-bold text-[#FFB000]">HP &lt;GO&gt;</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-        </div>
-      {/if}
-
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
         >
           {isMaximized ? "RESTORE" : "MAX"}
         </button>
@@ -75,9 +65,9 @@
   </div>
 
   <!-- Historical Price Table -->
-  <div class="flex-1 overflow-y-auto p-1">
+  <div class="flex-1 overflow-y-auto p-1 bg-[#06090F]">
     <table class="w-full text-left border-collapse font-mono text-2xs">
-      <thead class="bg-[#182030]/80 text-[#64748B] sticky top-0 border-b border-[#1E2638]">
+      <thead class="bg-[#090D16] text-[#5E6D82] sticky top-0 border-b border-[#172033]">
         <tr>
           <th class="p-2">DATE</th>
           <th class="p-2 text-right">OPEN</th>
@@ -88,25 +78,25 @@
           <th class="p-2 text-right">OVERNIGHT (R<sub>on</sub>)</th>
           <th class="p-2 text-right">INTRADAY (R<sub>id</sub>)</th>
           <th class="p-2 text-right">TOTAL (R<sub>tot</sub>)</th>
-          <th class="p-2 text-right">TYPICAL VWAP</th>
+          <th class="p-2 text-right">VWAP</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-[#182030]/40">
+      <tbody class="divide-y divide-[#172033]/40">
         {#each priceRows as row}
-          <tr class="hover:bg-[#0A0E17] transition-colors">
-            <td class="p-2 text-[#E2E8F0]">{row.date}</td>
-            <td class="p-2 text-right text-[#E2E8F0]">${row.open.toFixed(2)}</td>
-            <td class="p-2 text-right text-[#E2E8F0]">${row.high.toFixed(2)}</td>
-            <td class="p-2 text-right text-[#E2E8F0]">${row.low.toFixed(2)}</td>
-            <td class="p-2 text-right font-bold text-[#E2E8F0]">${row.close.toFixed(2)}</td>
-            <td class="p-2 text-right text-[#64748B]">{(row.volume / 1000000).toFixed(1)}M</td>
-            <td class="p-2 text-right font-mono {row.overnight_return >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+          <tr class="hover:bg-[#0C111B] transition-colors">
+            <td class="p-2 text-[#E6EDF5]">{row.date}</td>
+            <td class="p-2 text-right text-[#E6EDF5]">${row.open.toFixed(2)}</td>
+            <td class="p-2 text-right text-[#E6EDF5]">${row.high.toFixed(2)}</td>
+            <td class="p-2 text-right text-[#E6EDF5]">${row.low.toFixed(2)}</td>
+            <td class="p-2 text-right font-bold text-[#E6EDF5]">${row.close.toFixed(2)}</td>
+            <td class="p-2 text-right text-[#5E6D82]">{(row.volume / 1000000).toFixed(1)}M</td>
+            <td class="p-2 text-right font-mono {row.overnight_return >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
               {row.overnight_return >= 0 ? "+" : ""}{row.overnight_return.toFixed(2)}%
             </td>
-            <td class="p-2 text-right font-mono {row.intraday_return >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+            <td class="p-2 text-right font-mono {row.intraday_return >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
               {row.intraday_return >= 0 ? "+" : ""}{row.intraday_return.toFixed(2)}%
             </td>
-            <td class="p-2 text-right font-bold font-mono {row.total_return >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+            <td class="p-2 text-right font-bold font-mono {row.total_return >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
               {row.total_return >= 0 ? "+" : ""}{row.total_return.toFixed(2)}%
             </td>
             <td class="p-2 text-right text-[#00D2FF]">

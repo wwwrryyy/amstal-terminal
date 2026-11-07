@@ -43,9 +43,9 @@
   );
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden text-xs">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs">
   <!-- Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033]">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -55,47 +55,37 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#FF9E00]">EDGAR &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">SEC 10-K/10-Q REDLINES & FORM 4 CLUSTERS</span>
+      <span class="font-bold text-[#FFB000]">EDGAR &lt;GO&gt;</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
     </div>
 
     <div class="flex items-center gap-2">
       <!-- Section Tabs -->
-      <div class="flex items-center bg-[#0A0E17] rounded border border-[#1E2638] p-0.5 text-2xs">
+      <div class="flex items-center bg-[#06090F] rounded border border-[#172033] p-0.5 text-2xs font-mono">
         <button
           onclick={() => (activeTab = "RISK")}
-          class="px-2 py-0.5 rounded transition-colors {activeTab === 'RISK' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeTab === 'RISK' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           ITEM 1A RISK
         </button>
         <button
           onclick={() => (activeTab = "MDA")}
-          class="px-2 py-0.5 rounded transition-colors {activeTab === 'MDA' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeTab === 'MDA' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           ITEM 7 MD&amp;A
         </button>
         <button
           onclick={() => (activeTab = "FORM4")}
-          class="px-2 py-0.5 rounded transition-colors {activeTab === 'FORM4' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeTab === 'FORM4' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           FORM 4 INSIDERS
         </button>
       </div>
 
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-        </div>
-      {/if}
-
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
         >
           {isMaximized ? "RESTORE" : "MAX"}
         </button>
@@ -108,35 +98,35 @@
     {#if activeTab === "RISK" || activeTab === "MDA"}
       <!-- Summary Metrics Bar -->
       <div class="grid grid-cols-4 gap-2">
-        <div class="p-2 bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col justify-between">
-          <span class="text-2xs text-[#64748B]">DIFFLIB SIMILARITY</span>
+        <div class="p-2 bg-[#06090F] border border-[#172033] rounded flex flex-col justify-between">
+          <span class="text-2xs text-[#5E6D82]">DIFFLIB SIMILARITY</span>
           <div class="flex items-baseline gap-1 mt-1 font-mono">
             <span class="text-sm font-bold text-[#00D2FF]">
               {activeTab === "RISK" ? (edgarData.item1a_similarity * 100).toFixed(1) : (edgarData.mda_similarity * 100).toFixed(1)}%
             </span>
-            <span class="text-2xs text-[#64748B]">vs prior FY</span>
+            <span class="text-2xs text-[#5E6D82]">vs prior FY</span>
           </div>
-          <span class="text-2xs text-[#64748B] mt-0.5">Automated NLP Hash</span>
+          <span class="text-2xs text-[#5E6D82] mt-0.5">NLP Hash</span>
         </div>
 
-        <div class="p-2 bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col justify-between">
-          <span class="text-2xs text-[#64748B]">SENTIMENT DRIFT (&Delta;)</span>
+        <div class="p-2 bg-[#06090F] border border-[#172033] rounded flex flex-col justify-between">
+          <span class="text-2xs text-[#5E6D82]">SENTIMENT DRIFT (&Delta;)</span>
           <div class="flex items-baseline gap-1 mt-1 font-mono">
-            <span class="text-sm font-bold {edgarData.item1a_sentiment_drift >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+            <span class="text-sm font-bold {edgarData.item1a_sentiment_drift >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
               {edgarData.item1a_sentiment_drift >= 0 ? "+" : ""}{edgarData.item1a_sentiment_drift.toFixed(2)}
             </span>
-            <span class="text-2xs text-[#64748B]">score</span>
+            <span class="text-2xs text-[#5E6D82]">score</span>
           </div>
-          <span class="text-2xs text-[#64748B] mt-0.5">FinBERT Embedding</span>
+          <span class="text-2xs text-[#5E6D82] mt-0.5">FinBERT Embedding</span>
         </div>
 
-        <div class="p-2 bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col justify-between">
-          <span class="text-2xs text-[#64748B]">NEW RISK CLAUSES</span>
+        <div class="p-2 bg-[#06090F] border border-[#172033] rounded flex flex-col justify-between">
+          <span class="text-2xs text-[#5E6D82]">NEW RISK CLAUSES</span>
           <div class="flex items-baseline gap-1 mt-1 font-mono">
-            <span class="text-sm font-bold text-[#FF9E00]">
+            <span class="text-sm font-bold text-[#FFB000]">
               +{selectedRedline?.added_clauses.length ?? 0}
             </span>
-            <span class="text-2xs text-[#64748B]">clauses</span>
+            <span class="text-2xs text-[#5E6D82]">clauses</span>
           </div>
           <span class="text-2xs text-[#64748B] mt-0.5">High Attention Delta</span>
         </div>
@@ -154,25 +144,25 @@
       </div>
 
       <!-- Redline Inspector Box -->
-      <div class="flex-1 bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-2xs font-mono">
-          <span class="font-bold text-[#FF9E00]">{selectedRedline?.section}</span>
-          <span class="text-[#00E676]">{selectedRedline?.status}</span>
+      <div class="flex-1 bg-[#06090F] border border-[#172033] rounded flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-1.5 bg-[#090D16] border-b border-[#172033] text-2xs font-mono">
+          <span class="font-bold text-[#FFB000]">{selectedRedline?.section}</span>
+          <span class="text-[#00FF66]">{selectedRedline?.status}</span>
         </div>
 
         <div class="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-2xs">
           <!-- Added clauses -->
           {#each selectedRedline?.added_clauses || [] as clause}
-            <div class="p-2 bg-[#00E676]/10 border-l-2 border-[#00E676] rounded text-[#E2E8F0] leading-relaxed">
-              <span class="font-bold text-[#00E676] block mb-0.5">[+] ADDED // NEW MATERIAL DISCLOSURE:</span>
+            <div class="p-2 bg-[#00FF66]/10 border-l-2 border-[#00FF66] rounded text-[#E6EDF5] leading-relaxed">
+              <span class="font-bold text-[#00FF66] block mb-0.5">[+] ADDED // NEW MATERIAL DISCLOSURE:</span>
               {clause}
             </div>
           {/each}
 
           <!-- Removed clauses -->
           {#each selectedRedline?.removed_clauses || [] as clause}
-            <div class="p-2 bg-[#FF3366]/10 border-l-2 border-[#FF3366] rounded text-[#94A3B8] leading-relaxed line-through">
-              <span class="font-bold text-[#FF3366] block mb-0.5">[-] STRICKEN // FORMER RISK CLAUSE:</span>
+            <div class="p-2 bg-[#FF3344]/10 border-l-2 border-[#FF3344] rounded text-[#8B98A5] leading-relaxed line-through">
+              <span class="font-bold text-[#FF3344] block mb-0.5">[-] STRICKEN // FORMER RISK CLAUSE:</span>
               {clause}
             </div>
           {/each}
@@ -180,15 +170,15 @@
       </div>
     {:else}
       <!-- Form 4 Insider Clusters Table -->
-      <div class="flex-1 bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-2xs font-mono">
-          <span class="font-bold text-[#FF9E00]">FORM 4 OPEN-MARKET CLUSTER TRANSACTIONS</span>
-          <span class="text-[#64748B]">RULE 10B5-1 FILTERING ENFORCED</span>
+      <div class="flex-1 bg-[#06090F] border border-[#172033] rounded flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-1.5 bg-[#090D16] border-b border-[#172033] text-2xs font-mono">
+          <span class="font-bold text-[#FFB000]">FORM 4 CLUSTER TRANSACTIONS</span>
+          <span class="text-[#5E6D82]">RULE 10B5-1 FILTERING ENFORCED</span>
         </div>
 
         <div class="flex-1 overflow-y-auto">
           <table class="w-full text-left border-collapse text-2xs font-mono">
-            <thead class="bg-[#182030]/60 text-[#64748B] sticky top-0">
+            <thead class="bg-[#090D16] text-[#5E6D82] sticky top-0">
               <tr>
                 <th class="p-2">FILING DATE</th>
                 <th class="p-2">INSIDER NAME</th>
@@ -200,33 +190,33 @@
                 <th class="p-2 text-center">PLAN STATUS</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-[#182030]/50">
+            <tbody class="divide-y divide-[#172033]/50">
               {#each edgarData.form4_transactions as tx}
-                <tr class="hover:bg-[#111622] transition-colors">
-                  <td class="p-2 text-[#E2E8F0]">{tx.filing_date}</td>
+                <tr class="hover:bg-[#0C111B] transition-colors">
+                  <td class="p-2 text-[#E6EDF5]">{tx.filing_date}</td>
                   <td class="p-2 font-semibold text-[#00D2FF]">{tx.insider_name}</td>
-                  <td class="p-2 text-[#64748B]">{tx.relationship}</td>
+                  <td class="p-2 text-[#5E6D82]">{tx.relationship}</td>
                   <td class="p-2 text-center">
                     <span
                       class="px-1.5 py-0.2 rounded font-bold {tx.transaction_code === 'P'
-                        ? 'bg-[#00E676]/20 text-[#00E676]'
-                        : 'bg-[#FF3366]/20 text-[#FF3366]'}"
+                        ? 'bg-[#00FF66]/20 text-[#00FF66]'
+                        : 'bg-[#FF3344]/20 text-[#FF3344]'}"
                     >
                       {tx.transaction_code === 'P' ? 'BUY (P)' : 'SELL (S)'}
                     </span>
                   </td>
-                  <td class="p-2 text-right text-[#E2E8F0]">{tx.shares.toLocaleString()}</td>
-                  <td class="p-2 text-right text-[#E2E8F0]">${tx.price.toFixed(2)}</td>
-                  <td class="p-2 text-right font-bold {tx.transaction_code === 'P' ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+                  <td class="p-2 text-right text-[#E6EDF5]">{tx.shares.toLocaleString()}</td>
+                  <td class="p-2 text-right text-[#E6EDF5]">${tx.price.toFixed(2)}</td>
+                  <td class="p-2 text-right font-bold {tx.transaction_code === 'P' ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
                     ${(tx.value / 1000000).toFixed(2)}M
                   </td>
                   <td class="p-2 text-center">
                     {#if tx.is_10b5_1}
-                      <span class="px-1.5 py-0.5 rounded bg-[#FF9E00]/20 text-[#FF9E00] text-3xs font-semibold">
+                      <span class="px-1.5 py-0.5 rounded bg-[#FFB000]/20 text-[#FFB000] text-3xs font-semibold">
                         10b5-1 SCHEDULED
                       </span>
                     {:else}
-                      <span class="px-1.5 py-0.5 rounded bg-[#00E676]/20 text-[#00E676] text-3xs font-semibold">
+                      <span class="px-1.5 py-0.5 rounded bg-[#00FF66]/20 text-[#00FF66] text-3xs font-semibold">
                         DISCRETIONARY CLUSTER
                       </span>
                     {/if}

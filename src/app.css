@@ -3,23 +3,29 @@
 @tailwind utilities;
 
 :root {
-  --bg-terminal: #0a0e17;
-  --bg-surface: #111622;
-  --bg-surface-active: #182030;
-  --border-subtle: #1e2638;
-  --border-focus: #ff9e00;
-  
-  --text-primary: #e2e8f0;
-  --text-muted: #64748b;
-  
-  --color-amber: #ff9e00;
-  --color-cyan: #00d2ff;
-  --color-green: #00e676;
-  --color-crimson: #ff3366;
-  
+  --bg-canvas: #06090F;
+  --bg-surface: #0C111B;
+  --bg-surface-hover: #111726;
+  --bg-surface-active: #151D2E;
+  --border-subtle: #172033;
+  --border-hairline: rgba(255, 255, 255, 0.07);
+  --border-focus: #FFB000;
+
+  --text-primary: #E6EDF5;
+  --text-muted: #5E6D82;
+  --text-dim: #3B4758;
+
+  --color-amber: #FFB000;
+  --color-cyan: #00D2FF;
+  --color-green: #00FF66;
+  --color-crimson: #FF3344;
+
   font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-  background-color: var(--bg-terminal);
+  background-color: var(--bg-canvas);
   color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "tnum" 1, "zero" 1;
 }
 
 body {
@@ -27,4 +33,54 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  background-color: #06090F;
+}
+
+/* Tabular figures for all telemetry numbers */
+.num, data, td, [data-tabular] {
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+/* Subtle Aerospace CRT Scanline Texture */
+.crt-grid {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.18) 50%, transparent 50%),
+                    linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+  background-size: 100% 2px, 32px 32px;
+}
+
+/* Sleek tactical scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06090F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1C2436;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2D3A54;
+}
+
+/* Aerospace HUD framing */
+.hud-frame {
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.hud-frame::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-hairline) 20%, var(--border-hairline) 80%, transparent);
+  pointer-events: none;
 }

@@ -270,62 +270,54 @@
   });
 </script>
 
-<div class="flex flex-col h-screen w-screen bg-[#0A0E17] text-[#E2E8F0] font-mono select-none overflow-hidden">
-  <!-- Bloomberg Top Command Header -->
-  <header class="flex items-center justify-between px-3 py-1.5 bg-[#111622] border-b border-[#1E2638] text-xs">
+<div class="flex flex-col h-screen w-screen bg-[#06090F] text-[#E2E8F0] font-mono select-none overflow-hidden">
+  <!-- Streamlined Telemetry Header -->
+  <header class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-xs">
     <!-- Brand & Connection -->
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-1.5">
-        <span class="font-bold tracking-widest text-[#FF9E00]">AMSTAL</span>
-        <span class="text-2xs px-1.5 py-0.2 rounded bg-[#182030] text-[#00D2FF] font-semibold border border-[#1E2638]">
-          v1.3
-        </span>
-      </div>
+    <div class="flex items-center gap-2.5">
+      <span class="text-xs font-semibold tracking-wider text-[#FFB000]">Amstal</span>
 
-      <!-- Engine Connection Badge -->
-      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0A0E17] border border-[#1E2638] text-2xs">
+      <!-- Telemetry Status Beacon -->
+      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#06090F] border border-[#172033] text-3xs">
         <span
-          class="w-2 h-2 rounded-full {connectionState === 'CONNECTED'
-            ? 'bg-[#00E676]'
+          class="w-1.5 h-1.5 rounded-full {connectionState === 'CONNECTED'
+            ? 'bg-[#00FF66] shadow-[0_0_6px_#00FF66]'
             : connectionState === 'SIMULATED_FALLBACK'
-              ? 'bg-[#00D2FF] animate-pulse'
+              ? 'bg-[#00D2FF]'
               : connectionState === 'CONNECTING'
-                ? 'bg-[#FF9E00] animate-ping'
-                : 'bg-[#FF3366]'}"
+                ? 'bg-[#FFB000] animate-ping'
+                : 'bg-[#FF3344]'}"
         ></span>
-        <span class="font-semibold {connectionState === 'CONNECTED' ? 'text-[#00E676]' : 'text-[#94A3B8]'}">
+        <span class="font-medium text-[#8B98A5]">
           {connectionState === "CONNECTED"
-            ? "DAEMON CONNECTED"
+            ? "LIVE"
             : connectionState === "SIMULATED_FALLBACK"
-              ? "SIMULATED STREAM [100ms]"
+              ? "SIM"
               : connectionState === "CONNECTING"
-                ? "CONNECTING..."
-                : "DAEMON OFFLINE"}
+                ? "SYNC"
+                : "OFFLINE"}
         </span>
-        <span class="text-[#64748B]">[{latencyMs}ms]</span>
+        <span class="text-[#475569]">[{latencyMs}ms]</span>
       </div>
     </div>
 
-    <!-- Center: Mnemonic Omnibar Input -->
-    <form onsubmit={handleFormSubmit} class="flex-1 max-w-2xl mx-4">
+    <!-- Center: Streamlined Omnibar -->
+    <form onsubmit={handleFormSubmit} class="flex-1 max-w-xl mx-3">
       <div class="relative flex items-center">
-        <span class="absolute left-3 text-[#FF9E00] text-xs font-bold select-none">&gt;</span>
+        <span class="absolute left-2.5 text-[#FFB000] text-xs font-bold select-none">&gt;</span>
         <input
           bind:this={omnibarRef}
           type="text"
           bind:value={omnibarInput}
           onkeydown={handleInputKeydown}
-          class="w-full pl-8 pr-20 py-1 text-xs bg-[#0A0E17] border border-[#1E2638] rounded text-[#FF9E00] font-mono tracking-wide focus:outline-none focus:border-[#FF9E00] focus:ring-1 focus:ring-[#FF9E00]"
-          placeholder="ENTER RPN COMMAND (e.g. NVDA US <EQUITY> GP <GO>, SPLC <GO>, DES <GO>)..."
+          class="w-full pl-7 pr-14 py-1 text-xs bg-[#06090F] border border-[#172033] rounded text-[#FFB000] font-mono tracking-wide focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/50 placeholder:text-[#3B4758]"
+          placeholder="COMMAND <GO> (e.g. NVDA GP <GO>)"
           spellcheck="false"
         />
         <div class="absolute right-1 flex items-center gap-1">
-          <kbd class="hidden md:inline px-1 py-0.5 text-3xs rounded bg-[#182030] text-[#64748B] border border-[#1E2638]">
-            /
-          </kbd>
           <button
             type="submit"
-            class="px-2.5 py-0.5 text-xs font-bold bg-[#FF9E00] text-black rounded hover:bg-[#E08A00] transition-colors cursor-pointer"
+            class="px-2 py-0.5 text-2xs font-bold bg-[#FFB000] text-black rounded hover:bg-[#E09900] transition-colors cursor-pointer"
           >
             GO
           </button>
@@ -333,81 +325,42 @@
       </div>
     </form>
 
-    <!-- Right Side: Security Pill, Regime & System Time -->
-    <div class="flex items-center gap-3">
-      <!-- Active Security & Quote Pill -->
-      <div class="flex items-center gap-1.5 px-2 py-0.5 bg-[#0A0E17] border border-[#1E2638] rounded text-2xs">
-        <span class="font-bold text-[#FF9E00]">{activeTicker}</span>
-        <span class="text-[#64748B]">{activeMarket}</span>
+    <!-- Right Side: Security, Regime & UTC Clock -->
+    <div class="flex items-center gap-2">
+      <!-- Active Security Pill -->
+      <div class="flex items-center gap-1.5 px-2 py-0.5 bg-[#06090F] border border-[#172033] rounded text-2xs">
+        <span class="font-bold text-[#FFB000]">{activeTicker}</span>
         <span class="text-[#E2E8F0] font-mono">${activeTick.price.toFixed(2)}</span>
-        <span class="font-mono {activeTick.change >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
-          {activeTick.change >= 0 ? "+" : ""}{activeTick.change.toFixed(2)} ({activeTick.change_pct >= 0 ? "+" : ""}{activeTick.change_pct.toFixed(2)}%)
+        <span class="font-mono {activeTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+          {activeTick.change >= 0 ? "+" : ""}{activeTick.change_pct.toFixed(2)}%
         </span>
       </div>
 
-      <!-- Macro Volatility Regime Badge -->
-      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded border text-2xs font-semibold {regimeStateColor}">
-        <span>REGIME:</span>
-        <span>{activeRegime.current_state} ({regimeProbPct}%)</span>
+      <!-- Regime Pill -->
+      <div class="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded border border-[#172033] bg-[#06090F] text-2xs {regimeStateColor}">
+        <span class="text-[#5E6D82]">REGIME:</span>
+        <span>{activeRegime.current_state.replace('_VOLATILITY', '')} ({regimeProbPct}%)</span>
       </div>
 
-      <!-- Live UTC System Clock -->
-      <div class="text-2xs text-[#94A3B8] font-mono hidden xl:block">
+      <!-- Live UTC Clock -->
+      <div class="text-3xs text-[#5E6D82] font-mono hidden xl:block">
         {systemTimeUtc}
       </div>
+
+      <!-- Quick Help Trigger -->
+      <button
+        type="button"
+        onclick={() => (showHelpModal = true)}
+        class="px-1.5 py-0.5 text-3xs font-mono text-[#8B98A5] hover:text-[#E2E8F0] rounded border border-[#172033] hover:border-[#8B98A5] transition-colors cursor-pointer"
+        title="Press F1 for Workstation Guide"
+      >
+        ?
+      </button>
     </div>
   </header>
 
-  <!-- Keyboard Shortcuts & Function Key Bar -->
-  <div class="flex items-center justify-between px-3 py-0.5 bg-[#0A0E17] border-b border-[#1E2638] text-3xs text-[#64748B]">
-    <div class="flex items-center gap-3">
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => (showHelpModal = true)}>
-        <strong class="text-[#FF9E00]">F1</strong> HELP
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} GP <GO>`)}>
-        <strong class="text-[#00D2FF]">F2</strong> GP &lt;PRICE&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} PORT <GO>`)}>
-        <strong class="text-[#FF9E00]">F3</strong> PORT &lt;KELLY&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`HMM <GO>`)}>
-        <strong class="text-[#00E676]">F4</strong> HMM &lt;REGIME&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} FA <GO>`)}>
-        <strong class="text-[#E2E8F0]">F5</strong> FA &lt;LAKEHOUSE&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => (maximizedSlot = null)}>
-        <strong class="text-[#00D2FF]">F6</strong> 2x2 GRID
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} DES <GO>`)}>
-        <strong class="text-[#00E676]">F7</strong> DES &lt;FACTSHEET&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} SPLC <GO>`)}>
-        <strong class="text-[#00D2FF]">F8</strong> SPLC &lt;PEER GRAPH&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} EDGAR <GO>`)}>
-        <strong class="text-[#FF9E00]">F9</strong> EDGAR &lt;REDLINES&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} NEWS <GO>`)}>
-        <strong class="text-[#00E676]">F10</strong> NEWS &lt;FINBERT&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} HP <GO>`)}>
-        <strong class="text-[#00D2FF]">F11</strong> HP &lt;PRICES&gt;
-      </button>
-      <button class="hover:text-[#E2E8F0] cursor-pointer bg-transparent border-0 p-0 text-inherit font-inherit" onclick={() => executeCommand(`${getSlotTicker(focusedSlot)} COPILOT <GO>`)}>
-        <strong class="text-[#FF9E00]">F12</strong> COPILOT &lt;AI&gt;
-      </button>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <span>FOCUSED SLOT: <strong class="text-[#FF9E00]">SLOT #{focusedSlot + 1}</strong></span>
-      <span>|</span>
-      <span>PRESS <code class="text-[#FF9E00] font-bold">ESC</code> TO RESTORE GRID</span>
-    </div>
-  </div>
-
   <!-- Dynamic Multi-Panel Workstation Grid Area -->
-  <main class="flex-1 min-h-0 p-1 bg-[#0A0E17]">
+  <main class="flex-1 min-h-0 p-1 bg-[#06090F]">
     {#if maximizedSlot !== null}
       <!-- Single Maximized Slot View -->
       <div class="h-full w-full">
@@ -520,7 +473,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             onclick={() => (focusedSlot = slotIdx)}
-            class="min-h-0 min-w-0 h-full rounded transition-all {focusedSlot === slotIdx ? 'ring-1 ring-[#FF9E00]/60' : ''}"
+            class="min-h-0 min-w-0 h-full rounded transition-all {focusedSlot === slotIdx ? 'ring-1 ring-[#FFB000]/70 border border-[#FFB000]/40' : 'border border-[#172033]'}"
           >
             {#if slotFunctions[slotIdx] === "GP"}
               <ChartPanel
@@ -627,54 +580,87 @@
     {/if}
   </main>
 
+  <!-- Sleek Tactical Telemetry Status Bar -->
+  <footer class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-t border-[#172033] text-3xs text-[#5E6D82] select-none">
+    <!-- Left: Focus & Hotkey Indicators -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="text-[#8B98A5]">SLOT:</span>
+        <span class="font-bold text-[#FFB000] font-mono">#{focusedSlot + 1}</span>
+      </div>
+      <span class="text-[#232F48]">|</span>
+      <div class="flex items-center gap-2 text-[#8B98A5]">
+        <span><kbd class="px-1 py-0.2 rounded bg-[#06090F] border border-[#172033] text-[#FFB000] font-mono font-bold">ESC</kbd> GRID</span>
+        <span><kbd class="px-1 py-0.2 rounded bg-[#06090F] border border-[#172033] text-[#00D2FF] font-mono font-bold">F1</kbd> GUIDE</span>
+        <span><kbd class="px-1 py-0.2 rounded bg-[#06090F] border border-[#172033] text-[#00FF66] font-mono font-bold">F12</kbd> COPILOT</span>
+      </div>
+    </div>
+
+    <!-- Center: Telemetry Status -->
+    <div class="hidden md:flex items-center gap-3 font-mono">
+      <span>FEED: <strong class="text-[#00FF66]">100ms CONFLATION</strong></span>
+      <span class="text-[#232F48]">|</span>
+      <span>IPC: <strong class="text-[#8B98A5]">/tmp/amstal.sock</strong></span>
+      <span class="text-[#232F48]">|</span>
+      <span>LAKEHOUSE: <strong class="text-[#00D2FF]">DUCKDB</strong></span>
+    </div>
+
+    <!-- Right: Brand & Latency -->
+    <div class="flex items-center gap-2 font-mono">
+      <span class="text-[#8B98A5]">CHANNEL:</span>
+      <span class="font-bold text-[#00D2FF]">{slotChannels[focusedSlot]}</span>
+      <span class="text-[#232F48]">|</span>
+      <span class="text-[#FFB000] font-semibold">Amstal</span>
+    </div>
+  </footer>
+
   <!-- Help / Keyboard Shortcuts Modal -->
   {#if showHelpModal}
-    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div class="bg-[#111622] border border-[#FF9E00]/60 rounded-lg max-w-2xl w-full p-6 text-xs shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-[#1E2638] pb-3">
+    <div class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div class="bg-[#0C111B] border border-[#FFB000]/60 rounded max-w-2xl w-full p-5 text-xs shadow-2xl flex flex-col gap-4">
+        <div class="flex items-center justify-between border-b border-[#172033] pb-3">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-bold text-[#FF9E00]">AMSTAL MNEMONIC WORKSTATION HELP</span>
-            <span class="px-2 py-0.5 rounded bg-[#182030] text-[#00D2FF] text-2xs">RPN SPEC v1.3</span>
+            <span class="text-sm font-bold text-[#FFB000] tracking-wide">Amstal Workstation Guide</span>
           </div>
           <button
             onclick={() => (showHelpModal = false)}
-            class="text-[#64748B] hover:text-white font-bold text-sm px-2 cursor-pointer"
+            class="text-[#5E6D82] hover:text-white font-bold text-sm px-2 cursor-pointer"
           >
             &times;
           </button>
         </div>
 
-        <div class="space-y-3 text-[#94A3B8] leading-relaxed">
+        <div class="space-y-3 text-[#8B98A5] leading-relaxed">
           <div>
-            <h4 class="font-bold text-[#E2E8F0] mb-1">Bloomberg-Style Command Syntax:</h4>
-            <code class="block p-2 bg-[#0A0E17] border border-[#1E2638] text-[#FF9E00] rounded">
+            <h4 class="font-bold text-[#E6EDF5] mb-1">Bloomberg-Style Command Syntax:</h4>
+            <code class="block p-2 bg-[#06090F] border border-[#172033] text-[#FFB000] rounded font-mono">
               [TICKER] [MARKET] &lt;ASSET CLASS&gt; [MNEMONIC] &lt;GO&gt;
             </code>
           </div>
 
           <div class="grid grid-cols-2 gap-3 text-2xs">
-            <div class="p-2.5 bg-[#0A0E17] rounded border border-[#1E2638]">
+            <div class="p-2.5 bg-[#06090F] rounded border border-[#172033]">
               <span class="font-bold text-[#00D2FF] block mb-1">COMMAND EXAMPLES:</span>
-              <ul class="space-y-1 font-mono text-[#E2E8F0]">
-                <li><code class="text-[#FF9E00]">NVDA US &lt;EQUITY&gt; GP &lt;GO&gt;</code> - Graph Price</li>
-                <li><code class="text-[#FF9E00]">CRWD PORT &lt;GO&gt;</code> - Kelly Sizer &amp; Signals</li>
-                <li><code class="text-[#FF9E00]">HMM &lt;GO&gt;</code> - 3-State Volatility Regime</li>
-                <li><code class="text-[#FF9E00]">AAPL FA &lt;GO&gt;</code> - 10Y XBRL Lakehouse</li>
-                <li><code class="text-[#FF9E00]">NVDA DES &lt;GO&gt;</code> - Security Master Profile</li>
-                <li><code class="text-[#FF9E00]">NVDA SPLC &lt;GO&gt;</code> - 10-Node Dynamic Peer GAT</li>
-                <li><code class="text-[#FF9E00]">NVDA EDGAR &lt;GO&gt;</code> - SEC Redlines &amp; Form 4</li>
-                <li><code class="text-[#FF9E00]">NVDA NEWS &lt;GO&gt;</code> - FinBERT Headline Stream</li>
-                <li><code class="text-[#FF9E00]">NVDA HP &lt;GO&gt;</code> - Historical Return Decomp</li>
-                <li><code class="text-[#FF9E00]">NVDA ANR &lt;GO&gt;</code> - Analyst Consensus &amp; Targets</li>
-                <li><code class="text-[#FF9E00]">COPILOT &lt;GO&gt;</code> - Quantitative AI Copilot</li>
-                <li><code class="text-[#FF9E00]">GRID &lt;GO&gt;</code> or <code class="text-[#FF9E00]">ALL &lt;GO&gt;</code> - Restore 2x2</li>
+              <ul class="space-y-1 font-mono text-[#E6EDF5]">
+                <li><code class="text-[#FFB000]">NVDA US &lt;EQUITY&gt; GP &lt;GO&gt;</code> - Graph Price</li>
+                <li><code class="text-[#FFB000]">CRWD PORT &lt;GO&gt;</code> - Kelly Sizer &amp; Signals</li>
+                <li><code class="text-[#FFB000]">HMM &lt;GO&gt;</code> - 3-State Volatility Regime</li>
+                <li><code class="text-[#FFB000]">AAPL FA &lt;GO&gt;</code> - 10Y XBRL Lakehouse</li>
+                <li><code class="text-[#FFB000]">NVDA DES &lt;GO&gt;</code> - Security Master Profile</li>
+                <li><code class="text-[#FFB000]">NVDA SPLC &lt;GO&gt;</code> - 10-Node Dynamic Peer GAT</li>
+                <li><code class="text-[#FFB000]">NVDA EDGAR &lt;GO&gt;</code> - SEC Redlines &amp; Form 4</li>
+                <li><code class="text-[#FFB000]">NVDA NEWS &lt;GO&gt;</code> - FinBERT Headline Stream</li>
+                <li><code class="text-[#FFB000]">NVDA HP &lt;GO&gt;</code> - Historical Return Decomp</li>
+                <li><code class="text-[#FFB000]">NVDA ANR &lt;GO&gt;</code> - Analyst Consensus &amp; Targets</li>
+                <li><code class="text-[#FFB000]">COPILOT &lt;GO&gt;</code> - Quantitative AI Copilot</li>
+                <li><code class="text-[#FFB000]">GRID &lt;GO&gt;</code> - Restore 2x2 Grid</li>
               </ul>
             </div>
 
-            <div class="p-2.5 bg-[#0A0E17] rounded border border-[#1E2638]">
-              <span class="font-bold text-[#00E676] block mb-1">HOTKEY SHORTCUTS:</span>
-              <ul class="space-y-1 font-mono text-[#E2E8F0]">
-                <li><strong class="text-[#00D2FF]">F1:</strong> Toggle Help Modal</li>
+            <div class="p-2.5 bg-[#06090F] rounded border border-[#172033]">
+              <span class="font-bold text-[#00FF66] block mb-1">HOTKEY SHORTCUTS:</span>
+              <ul class="space-y-1 font-mono text-[#E6EDF5]">
+                <li><strong class="text-[#00D2FF]">F1:</strong> Toggle Workstation Guide</li>
                 <li><strong class="text-[#00D2FF]">F2:</strong> Graph Price (GP)</li>
                 <li><strong class="text-[#00D2FF]">F3:</strong> Portfolio &amp; Kelly (PORT)</li>
                 <li><strong class="text-[#00D2FF]">F4:</strong> Macro Regime (HMM)</li>
@@ -691,22 +677,18 @@
             </div>
           </div>
 
-          <div class="p-2.5 bg-[#0A0E17] rounded border border-[#1E2638] text-2xs">
-            <span class="font-bold text-[#FF9E00] block mb-1">REACTIVE COLOR-CHANNEL SYNCHRONIZATION:</span>
-            <p class="text-[#CBD5E1]">
-              Every panel toolbar includes a color channel link button (e.g. <strong class="text-[#00D2FF]">[BLUE]</strong>, <strong class="text-[#FF9E00]">[AMBER]</strong>, <strong class="text-[#00E676]">[GREEN]</strong>, <strong class="text-[#FF3366]">[RED]</strong>, <strong class="text-[#64748B]">[UNLINKED]</strong>). Changing a ticker in any linked panel (or clicking a peer in <code class="text-[#00D2FF]">SPLC</code>) reactively updates all other panels linked to that color channel.
+          <div class="p-2.5 bg-[#06090F] rounded border border-[#172033] text-2xs">
+            <span class="font-bold text-[#FFB000] block mb-1">COLOR-CHANNEL SYNCHRONIZATION:</span>
+            <p class="text-[#8B98A5]">
+              Every panel toolbar includes a color channel link button (<strong class="text-[#00D2FF]">[BLUE]</strong>, <strong class="text-[#FFB000]">[AMBER]</strong>, <strong class="text-[#00FF66]">[GREEN]</strong>, <strong class="text-[#FF3344]">[RED]</strong>, <strong class="text-[#5E6D82]">[UNLINKED]</strong>). Changing a ticker in any linked panel (or clicking a peer in <code class="text-[#00D2FF]">SPLC</code>) reactively updates all other panels linked to that color channel.
             </p>
-          </div>
-
-          <div class="text-3xs text-[#64748B] border-t border-[#1E2638] pt-2">
-            Amstal Terminal automatically connects to WebSocket broadcast on <code class="text-[#00D2FF]">ws://127.0.0.1:8194</code> and communicates via Unix Domain Socket <code class="text-[#00D2FF]">/tmp/amstal.sock</code>. When daemon is offline, high-frequency simulated conflation stream ensures interactive zero-latency operation.
           </div>
         </div>
 
-        <div class="flex justify-end pt-2 border-t border-[#1E2638]">
+        <div class="flex justify-end pt-2 border-t border-[#172033]">
           <button
             onclick={() => (showHelpModal = false)}
-            class="px-4 py-1.5 bg-[#FF9E00] text-black font-bold rounded hover:bg-[#E08A00] transition-colors cursor-pointer"
+            class="px-4 py-1 bg-[#FFB000] text-black font-bold rounded hover:bg-[#E09900] transition-colors cursor-pointer"
           >
             DISMISS [ESC]
           </button>

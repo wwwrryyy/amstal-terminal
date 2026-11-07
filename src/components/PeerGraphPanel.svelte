@@ -83,9 +83,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden text-xs">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs">
   <!-- Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033]">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -95,25 +95,16 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#FF9E00]">SPLC &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">DYNAMIC ROLLING PEER GAT GRAPH (10 NODES)</span>
+      <span class="font-bold text-[#FFB000]">SPLC &lt;GO&gt;</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
+      <span class="text-3xs text-[#5E6D82] font-mono">PEER GAT GRAPH (10N)</span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-        </div>
-      {/if}
-
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
         >
           {isMaximized ? "RESTORE" : "MAX"}
         </button>
@@ -124,17 +115,17 @@
   <!-- Main Graph Area & Details Split -->
   <div class="flex-1 flex flex-col md:flex-row overflow-hidden p-2 gap-2">
     <!-- SVG Canvas -->
-    <div class="flex-1 relative bg-[#0A0E17] border border-[#1E2638] rounded flex flex-col overflow-hidden">
+    <div class="flex-1 relative bg-[#06090F] border border-[#172033] rounded flex flex-col overflow-hidden">
       <!-- Top Metrics Banner inside canvas -->
-      <div class="flex items-center justify-between px-3 py-1 bg-[#182030]/80 border-b border-[#1E2638]/60 text-2xs font-mono">
+      <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-2xs font-mono">
         <div class="flex items-center gap-3">
           <span>GAT ENTROPY: <strong class="text-[#00D2FF]">{graph.gat_attention_entropy?.toFixed(2) ?? '1.84'}</strong></span>
-          <span>SPILLOVER LEADER: <strong class="text-[#00E676]">{graph.top_spillover_contributor ?? 'TSM'}</strong></span>
+          <span>SPILLOVER LEADER: <strong class="text-[#00FF66]">{graph.top_spillover_contributor ?? 'TSM'}</strong></span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#FF9E00]"></span>Target</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#FFB000]"></span>Target</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#00D2FF]"></span>GICS</span>
-          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#00E676]"></span>Lead-Lag (5D)</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#00FF66]"></span>Lead-Lag</span>
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#A855F7]"></span>ETF</span>
         </div>
       </div>
@@ -255,11 +246,11 @@
     </div>
 
     <!-- Right Sidebar: Node Details & Lead-Lag Breakdown -->
-    <div class="w-full md:w-64 bg-[#0A0E17] border border-[#1E2638] rounded p-2.5 flex flex-col justify-between text-2xs">
+    <div class="w-full md:w-64 bg-[#06090F] border border-[#172033] rounded p-2.5 flex flex-col justify-between text-2xs">
       <div>
-        <div class="border-b border-[#1E2638] pb-1.5 mb-2">
-          <span class="font-bold text-[#FF9E00] tracking-wider block">INSPECTION NODE</span>
-          <span class="text-[#64748B]">Click any node in graph to inspect</span>
+        <div class="border-b border-[#172033] pb-1.5 mb-2">
+          <span class="font-bold text-[#FFB000] tracking-wider block">INSPECTION NODE</span>
+          <span class="text-[#5E6D82]">Click any node in graph to inspect</span>
         </div>
 
         {#if selectedNode}
@@ -267,21 +258,21 @@
           <div class="space-y-2 font-mono">
             <div class="flex items-center justify-between">
               <span class="text-sm font-bold {theme.textCol}">{selectedNode.label}</span>
-              <span class="px-1.5 py-0.5 rounded bg-[#182030] text-2xs text-[#E2E8F0]">{theme.label}</span>
+              <span class="px-1.5 py-0.5 rounded bg-[#121824] border border-[#172033] text-2xs text-[#E6EDF5]">{theme.label}</span>
             </div>
 
-            <div class="p-2 bg-[#111622] rounded border border-[#1E2638] space-y-1">
-              <div class="flex justify-between text-[#64748B]">
+            <div class="p-2 bg-[#0C111B] rounded border border-[#172033] space-y-1">
+              <div class="flex justify-between text-[#5E6D82]">
                 <span>ROLE CODE:</span>
-                <span class="text-[#E2E8F0]">{selectedNode.role_code}</span>
+                <span class="text-[#E6EDF5]">{selectedNode.role_code}</span>
               </div>
               {#if selectedNode.cross_corr_5d !== undefined}
-                <div class="flex justify-between text-[#64748B]">
+                <div class="flex justify-between text-[#5E6D82]">
                   <span>5D LEAD-LAG CORR:</span>
-                  <span class="text-[#00E676] font-bold">+{selectedNode.cross_corr_5d.toFixed(2)}</span>
+                  <span class="text-[#00FF66] font-bold">+{selectedNode.cross_corr_5d.toFixed(2)}</span>
                 </div>
               {/if}
-              <div class="flex justify-between text-[#64748B]">
+              <div class="flex justify-between text-[#5E6D82]">
                 <span>MARKET BETA:</span>
                 <span class="text-[#00D2FF]">{selectedNode.beta_market?.toFixed(2) ?? '1.15'}</span>
               </div>
@@ -290,7 +281,7 @@
             {#if selectedNode.id !== ticker}
               <button
                 onclick={() => handleSetAsActiveTicker(selectedNode.id)}
-                class="w-full py-1.5 rounded font-bold bg-[#FF9E00] text-black hover:bg-[#E08A00] transition-colors mt-2"
+                class="w-full py-1.5 rounded font-bold bg-[#FFB000] text-black hover:bg-[#E09900] transition-colors mt-2"
               >
                 FOCUS [{selectedNode.id}] WORKSPACE &gt;
               </button>
@@ -298,25 +289,25 @@
           </div>
         {:else}
           <!-- Default target overview -->
-          <div class="space-y-2 text-[#64748B] font-mono">
-            <div>TARGET ANCHOR: <strong class="text-[#FF9E00]">{ticker}</strong></div>
-            <p class="leading-relaxed">
-              10-node localized subgraph extracted per PRD Section 5.7:
-              4 GICS sub-industry peers, 4 5-day lead-lag cross-correlation stocks, and sector benchmark ETF.
+          <div class="space-y-2 text-[#5E6D82] font-mono">
+            <div>TARGET ANCHOR: <strong class="text-[#FFB000]">{ticker}</strong></div>
+            <p class="leading-relaxed text-[#8B98A5]">
+              10-node localized subgraph:
+              4 GICS peers, 4 5-day lead-lag cross-correlation stocks, and sector ETF.
             </p>
-            <div class="p-2 bg-[#111622] rounded border border-[#1E2638] space-y-1">
+            <div class="p-2 bg-[#0C111B] rounded border border-[#172033] space-y-1">
               <div>&bull; Cyan Nodes: GICS Sub-Industry</div>
               <div>&bull; Green Nodes: 5D Lead-Lag Network</div>
               <div>&bull; Purple Node: Sector ETF</div>
-              <div>&bull; Line Thickness: GAT Attention (&alpha;<sub>ij</sub>)</div>
+              <div>&bull; Line Thickness: Attention (&alpha;<sub>ij</sub>)</div>
             </div>
           </div>
         {/if}
       </div>
 
-      <div class="border-t border-[#1E2638] pt-2 text-[#64748B] text-2xs font-mono">
-        <div>GRAPH ARCHITECTURE: PEER GAT (CPU)</div>
-        <div>STRICT ZERO-LOOKAHEAD ENFORCED</div>
+      <div class="border-t border-[#172033] pt-2 text-[#5E6D82] text-2xs font-mono">
+        <div>GRAPH ARCHITECTURE: PEER GAT</div>
+        <div>ZERO-LOOKAHEAD ENFORCED</div>
       </div>
     </div>
   </div>

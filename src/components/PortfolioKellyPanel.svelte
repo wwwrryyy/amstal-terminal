@@ -113,9 +113,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden">
   <!-- Panel Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-xs">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-xs">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -125,37 +125,28 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#FF9E00]">PORT &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">QARE-MM v1.3 SIGNAL & MULTI-OUTCOME KELLY</span>
+      <span class="font-bold text-[#FFB000]">PORT &lt;GO&gt;</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-          <button onclick={() => onSwitchFunction("SPLC")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">SPLC</button>
-        </div>
-      {/if}
       <!-- Kelly Multiplier Controls -->
-      <div class="flex items-center bg-[#0A0E17] rounded border border-[#1E2638] p-0.5 text-2xs">
+      <div class="flex items-center bg-[#06090F] rounded border border-[#172033] p-0.5 text-2xs font-mono">
         <button
           onclick={() => (kellyMultiplier = 0.25)}
-          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 0.25 ? 'bg-[#1E2638] text-[#FF9E00] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 0.25 ? 'bg-[#151D2E] text-[#FFB000] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           1/4 KELLY
         </button>
         <button
           onclick={() => (kellyMultiplier = 0.5)}
-          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 0.5 ? 'bg-[#1E2638] text-[#FF9E00] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 0.5 ? 'bg-[#151D2E] text-[#FFB000] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           1/2 KELLY
         </button>
         <button
           onclick={() => (kellyMultiplier = 1.0)}
-          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 1.0 ? 'bg-[#1E2638] text-[#FF9E00] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {kellyMultiplier === 1.0 ? 'bg-[#151D2E] text-[#FFB000] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           FULL KELLY
         </button>
@@ -164,7 +155,7 @@
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
           title={isMaximized ? "Restore 2x2 Grid" : "Maximize Panel"}
         >
           {isMaximized ? "RESTORE" : "MAX"}
@@ -176,17 +167,17 @@
   <!-- Main Split Layout: Top Kelly Sizer Card, Bottom Factor Breakdown -->
   <div class="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-2 gap-2 text-xs">
     <!-- Kelly Execution Summary Tile -->
-    <div class="grid grid-cols-4 gap-2 p-2.5 bg-[#0A0E17] border border-[#1E2638] rounded">
+    <div class="grid grid-cols-4 gap-2 p-2 bg-[#06090F] border border-[#172033] rounded">
       <!-- Action & Conviction -->
-      <div class="flex flex-col justify-between border-r border-[#1E2638]/60 pr-2">
-        <span class="text-2xs text-[#64748B]">EXECUTION ACTION</span>
+      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+        <span class="text-2xs text-[#5E6D82]">EXECUTION ACTION</span>
         <div class="flex items-center gap-2 mt-1">
           <span
             class="px-2 py-0.5 text-xs font-bold rounded {signal.execution_recommendation.action === 'BUY'
-              ? 'bg-[#00E676]/20 text-[#00E676] border border-[#00E676]/40'
+              ? 'bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40'
               : signal.execution_recommendation.action === 'SELL'
-                ? 'bg-[#FF3366]/20 text-[#FF3366] border border-[#FF3366]/40'
-                : 'bg-[#FF9E00]/20 text-[#FF9E00] border border-[#FF9E00]/40'}"
+                ? 'bg-[#FF3344]/20 text-[#FF3344] border border-[#FF3344]/40'
+                : 'bg-[#FFB000]/20 text-[#FFB000] border border-[#FFB000]/40'}"
           >
             {signal.execution_recommendation.action}
           </span>
@@ -194,74 +185,74 @@
             {signal.execution_recommendation.conviction_tier}
           </span>
         </div>
-        <span class="text-2xs text-[#64748B] mt-1 font-mono">
+        <span class="text-2xs text-[#5E6D82] mt-1 font-mono">
           ENGINE: {signal.winning_engine}
         </span>
       </div>
 
       <!-- Kelly Weights -->
-      <div class="flex flex-col justify-between border-r border-[#1E2638]/60 pr-2">
-        <span class="text-2xs text-[#64748B]">ALLOCATION WEIGHT</span>
+      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+        <span class="text-2xs text-[#5E6D82]">ALLOCATION WEIGHT</span>
         <div class="flex items-baseline gap-1 mt-1 font-mono">
-          <span class="text-sm font-bold text-[#FF9E00]">{finalAllocPct}%</span>
-          <span class="text-2xs text-[#64748B]">(L1 Norm)</span>
+          <span class="text-sm font-bold text-[#FFB000]">{finalAllocPct}%</span>
+          <span class="text-2xs text-[#5E6D82]">(L1 Norm)</span>
         </div>
-        <div class="text-2xs text-[#64748B] font-mono">
-          Unconstrained: <strong class="text-[#E2E8F0]">{unconstrainedKelly}%</strong>
+        <div class="text-2xs text-[#5E6D82] font-mono">
+          Unconstrained: <strong class="text-[#E6EDF5]">{unconstrainedKelly}%</strong>
         </div>
       </div>
 
       <!-- Calibrated Probabilities -->
-      <div class="flex flex-col justify-between border-r border-[#1E2638]/60 pr-2">
-        <span class="text-2xs text-[#64748B]">CALIBRATED POSTERIOR (T={signal.calibration.temperature})</span>
+      <div class="flex flex-col justify-between border-r border-[#172033] pr-2">
+        <span class="text-2xs text-[#5E6D82]">CALIBRATED POSTERIOR (T={signal.calibration.temperature})</span>
         <div class="flex items-center gap-1.5 mt-1 font-mono text-2xs">
-          <span class="text-[#00E676]">P(B): {(signal.calibration.calibrated_probabilities.outperform_buy * 100).toFixed(1)}%</span>
-          <span class="text-[#64748B]">|</span>
-          <span class="text-[#FF9E00]">P(H): {(signal.calibration.calibrated_probabilities.neutral_hold * 100).toFixed(1)}%</span>
-          <span class="text-[#64748B]">|</span>
-          <span class="text-[#FF3366]">P(S): {(signal.calibration.calibrated_probabilities.underperform_sell * 100).toFixed(1)}%</span>
+          <span class="text-[#00FF66]">P(B): {(signal.calibration.calibrated_probabilities.outperform_buy * 100).toFixed(1)}%</span>
+          <span class="text-[#5E6D82]">|</span>
+          <span class="text-[#FFB000]">P(H): {(signal.calibration.calibrated_probabilities.neutral_hold * 100).toFixed(1)}%</span>
+          <span class="text-[#5E6D82]">|</span>
+          <span class="text-[#FF3344]">P(S): {(signal.calibration.calibrated_probabilities.underperform_sell * 100).toFixed(1)}%</span>
         </div>
-        <div class="w-full bg-[#182030] h-1.5 rounded-full overflow-hidden flex mt-1">
-          <div style="width: {signal.calibration.calibrated_probabilities.outperform_buy * 100}%" class="bg-[#00E676] h-full"></div>
-          <div style="width: {signal.calibration.calibrated_probabilities.neutral_hold * 100}%" class="bg-[#FF9E00] h-full"></div>
-          <div style="width: {signal.calibration.calibrated_probabilities.underperform_sell * 100}%" class="bg-[#FF3366] h-full"></div>
+        <div class="w-full bg-[#121824] h-1.5 rounded-full overflow-hidden flex mt-1">
+          <div style="width: {signal.calibration.calibrated_probabilities.outperform_buy * 100}%" class="bg-[#00FF66] h-full"></div>
+          <div style="width: {signal.calibration.calibrated_probabilities.neutral_hold * 100}%" class="bg-[#FFB000] h-full"></div>
+          <div style="width: {signal.calibration.calibrated_probabilities.underperform_sell * 100}%" class="bg-[#FF3344] h-full"></div>
         </div>
       </div>
 
       <!-- Growth & Friction -->
       <div class="flex flex-col justify-between">
-        <span class="text-2xs text-[#64748B]">EXPECTED GROWTH g(f)</span>
+        <span class="text-2xs text-[#5E6D82]">EXPECTED GROWTH g(f)</span>
         <div class="flex items-baseline gap-1 mt-1 font-mono">
-          <span class="text-sm font-bold text-[#00E676]">+{expectedGrowthRate}%</span>
-          <span class="text-2xs text-[#64748B]">ann.</span>
+          <span class="text-sm font-bold text-[#00FF66]">+{expectedGrowthRate}%</span>
+          <span class="text-2xs text-[#5E6D82]">ann.</span>
         </div>
-        <div class="text-2xs text-[#64748B] font-mono">
-          Friction: <strong class="text-[#E2E8F0]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong> | &kappa;: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}</strong>
+        <div class="text-2xs text-[#5E6D82] font-mono">
+          Friction: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong> | &kappa;: <strong class="text-[#00D2FF]">{kappa.toFixed(2)}</strong>
         </div>
       </div>
     </div>
 
     <!-- Factor Ranks Breakdown Table -->
-    <div class="flex-1 flex flex-col bg-[#0A0E17] border border-[#1E2638] rounded overflow-hidden">
-      <div class="flex items-center justify-between px-3 py-1 bg-[#182030] text-2xs font-bold text-[#64748B] border-b border-[#1E2638]">
-        <span class="w-1/3">QARE-MM v1.3 ALPHA FACTOR</span>
+    <div class="flex-1 flex flex-col bg-[#06090F] border border-[#172033] rounded overflow-hidden">
+      <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] text-2xs font-bold text-[#5E6D82] border-b border-[#172033]">
+        <span class="w-1/3">ALPHA FACTOR</span>
         <span class="w-1/4">CATEGORY</span>
         <span class="w-1/6 text-right">RAW SCORE</span>
         <span class="w-1/4 pl-4">NORMALIZED RANK / DISPERSION</span>
       </div>
 
-      <div class="flex-1 overflow-y-auto divide-y divide-[#182030]/60">
+      <div class="flex-1 overflow-y-auto divide-y divide-[#172033]/60">
         {#each Object.entries(signal.signal_breakdown) as [key, val]}
           {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
           {@const bar = getBarWidth(val, meta.min, meta.max)}
-          <div class="flex items-center justify-between px-3 py-1 text-2xs hover:bg-[#111622]/80 transition-colors">
-            <span class="w-1/3 font-semibold text-[#E2E8F0] truncate" title={meta.label}>
+          <div class="flex items-center justify-between px-3 py-1 text-2xs hover:bg-[#0C111B] transition-colors">
+            <span class="w-1/3 font-semibold text-[#E6EDF5] truncate" title={meta.label}>
               {meta.label}
             </span>
-            <span class="w-1/4 text-[#64748B] truncate">
+            <span class="w-1/4 text-[#5E6D82] truncate">
               {meta.group}
             </span>
-            <span class="w-1/6 text-right font-mono {val >= 0 ? 'text-[#00E676]' : 'text-[#FF3366]'}">
+            <span class="w-1/6 text-right font-mono {val >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
               {val >= 0 ? "+" : ""}{val.toFixed(2)}
             </span>
 
@@ -269,23 +260,23 @@
             <div class="w-1/4 pl-4 flex items-center">
               {#if meta.min < 0}
                 <!-- Zero-centered meter -->
-                <div class="w-full h-2 bg-[#182030] rounded flex relative">
-                  <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#64748B]/50"></div>
+                <div class="w-full h-2 bg-[#121824] rounded flex relative">
+                  <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#5E6D82]/50"></div>
                   {#if val >= 0}
                     <div
                       style="left: 50%; width: {Math.min(50, (val / meta.max) * 50)}%"
-                      class="absolute top-0 bottom-0 bg-[#00E676] rounded-r"
+                      class="absolute top-0 bottom-0 bg-[#00FF66] rounded-r"
                     ></div>
                   {:else}
                     <div
                       style="right: 50%; width: {Math.min(50, (Math.abs(val) / Math.abs(meta.min)) * 50)}%"
-                      class="absolute top-0 bottom-0 bg-[#FF3366] rounded-l"
+                      class="absolute top-0 bottom-0 bg-[#FF3344] rounded-l"
                     ></div>
                   {/if}
                 </div>
               {:else}
                 <!-- 0 to 1 meter -->
-                <div class="w-full h-2 bg-[#182030] rounded overflow-hidden">
+                <div class="w-full h-2 bg-[#121824] rounded overflow-hidden">
                   <div
                     style="width: {bar.width}"
                     class="h-full bg-[#00D2FF]"

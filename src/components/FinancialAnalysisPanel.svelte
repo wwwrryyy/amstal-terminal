@@ -76,9 +76,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#111622] border border-[#1E2638] rounded select-none overflow-hidden">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden">
   <!-- Panel Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] text-xs">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-xs">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -88,43 +88,34 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#E2E8F0]">FA &lt;GO&gt;</span>
+      <span class="font-bold text-[#E6EDF5]">FA &lt;GO&gt;</span>
       <span class="text-[#00D2FF] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">10Y POINT-IN-TIME XBRL LAKEHOUSE</span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00E676] hover:bg-[#1E2638]">DES</button>
-          <button onclick={() => onSwitchFunction("SPLC")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">SPLC</button>
-        </div>
-      {/if}
       <!-- Statement Selector -->
-      <div class="flex items-center bg-[#0A0E17] rounded border border-[#1E2638] p-0.5 text-2xs">
+      <div class="flex items-center bg-[#06090F] rounded border border-[#172033] p-0.5 text-2xs font-mono">
         <button
           onclick={() => (activeStatement = "INCOME")}
-          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'INCOME' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'INCOME' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           INCOME
         </button>
         <button
           onclick={() => (activeStatement = "BALANCE")}
-          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'BALANCE' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'BALANCE' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           BALANCE
         </button>
         <button
           onclick={() => (activeStatement = "CASHFLOW")}
-          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'CASHFLOW' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'CASHFLOW' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           CASH FLOW
         </button>
         <button
           onclick={() => (activeStatement = "RATIOS")}
-          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'RATIOS' ? 'bg-[#1E2638] text-[#00D2FF] font-bold' : 'text-[#64748B] hover:text-[#E2E8F0]'}"
+          class="px-2 py-0.5 rounded transition-colors {activeStatement === 'RATIOS' ? 'bg-[#151D2E] text-[#00D2FF] font-bold' : 'text-[#5E6D82] hover:text-[#E6EDF5]'}"
         >
           RATIOS
         </button>
@@ -133,17 +124,17 @@
       <!-- PIT Safe Toggle -->
       <button
         onclick={() => (pitStrict = !pitStrict)}
-        class="flex items-center gap-1.5 px-2 py-0.5 text-2xs rounded border transition-colors {pitStrict ? 'border-[#00E676]/50 bg-[#00E676]/10 text-[#00E676]' : 'border-[#FF9E00]/50 bg-[#FF9E00]/10 text-[#FF9E00]'}"
+        class="flex items-center gap-1.5 px-2 py-0.5 text-2xs rounded border transition-colors {pitStrict ? 'border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66]' : 'border-[#FFB000]/50 bg-[#FFB000]/10 text-[#FFB000]'}"
         title="Enforces XBRL filed-date cutoffs to eliminate lookahead bias in restatements"
       >
-        <span class="w-1.5 h-1.5 rounded-full {pitStrict ? 'bg-[#00E676]' : 'bg-[#FF9E00]'}"></span>
-        <span>{pitStrict ? "PIT STRICT (AS-FILED)" : "AS-RESTATED"}</span>
+        <span class="w-1.5 h-1.5 rounded-full {pitStrict ? 'bg-[#00FF66]' : 'bg-[#FFB000]'}"></span>
+        <span>{pitStrict ? "PIT STRICT" : "AS-RESTATED"}</span>
       </button>
 
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
           title={isMaximized ? "Restore 2x2 Grid" : "Maximize Panel"}
         >
           {isMaximized ? "RESTORE" : "MAX"}
@@ -153,17 +144,17 @@
   </div>
 
   <!-- Table Container -->
-  <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto">
+  <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto bg-[#06090F]">
     <table class="w-full text-2xs border-collapse font-mono select-text">
       <!-- Period / SEC EDGAR Headers -->
       <thead>
-        <tr class="bg-[#0A0E17] text-[#64748B] border-b border-[#1E2638] sticky top-0 z-10">
-          <th class="p-2 text-left sticky left-0 bg-[#0A0E17] z-20 min-w-[180px] border-r border-[#1E2638]">
+        <tr class="bg-[#090D16] text-[#5E6D82] border-b border-[#172033] sticky top-0 z-10">
+          <th class="p-2 text-left sticky left-0 bg-[#090D16] z-20 min-w-[180px] border-r border-[#172033]">
             FINANCIAL METRIC
           </th>
           {#each lakehouse.filings as f}
             <th class="p-2 text-right min-w-[95px]">
-              <div class="font-bold text-[#E2E8F0]">{f.period}</div>
+              <div class="font-bold text-[#E6EDF5]">{f.period}</div>
               <button
                 onclick={() => (selectedFiling = f)}
                 class="text-3xs text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-normal truncate"
@@ -177,15 +168,15 @@
       </thead>
 
       <!-- Statement Rows -->
-      <tbody class="divide-y divide-[#182030]/60">
+      <tbody class="divide-y divide-[#172033]/60">
         {#each currentRows as row}
-          <tr class="hover:bg-[#182030]/50 transition-colors">
-            <td class="p-1.5 sticky left-0 bg-[#111622] z-10 border-r border-[#1E2638] text-[#E2E8F0] font-semibold truncate">
+          <tr class="hover:bg-[#0C111B] transition-colors">
+            <td class="p-1.5 sticky left-0 bg-[#0C111B] z-10 border-r border-[#172033] text-[#E6EDF5] font-semibold truncate">
               {row.label}
             </td>
             {#each lakehouse.filings as f}
               {@const val = row.values[f.period]}
-              <td class="p-1.5 text-right font-mono text-[#94A3B8]">
+              <td class="p-1.5 text-right font-mono text-[#8B98A5]">
                 {formatValue(val, row.format)}
               </td>
             {/each}
@@ -197,21 +188,21 @@
 
   <!-- SEC Filing Drawer Modal if selected -->
   {#if selectedFiling}
-    <div class="p-2 bg-[#0A0E17] border-t border-[#1E2638] flex items-center justify-between text-2xs">
+    <div class="p-2 bg-[#06090F] border-t border-[#172033] flex items-center justify-between text-2xs">
       <div class="flex items-center gap-3">
         <span class="text-[#00D2FF] font-bold">{selectedFiling.period} 10-K FILING METADATA:</span>
-        <span class="text-[#64748B]">FILED: <strong class="text-[#E2E8F0]">{selectedFiling.filed_date}</strong></span>
-        <span class="text-[#64748B]">PERIOD END: <strong class="text-[#E2E8F0]">{selectedFiling.period_end_date}</strong></span>
-        <span class="text-[#64748B]">ACCESSION: <code class="text-[#FF9E00]">{selectedFiling.accession_number}</code></span>
+        <span class="text-[#5E6D82]">FILED: <strong class="text-[#E6EDF5]">{selectedFiling.filed_date}</strong></span>
+        <span class="text-[#5E6D82]">PERIOD END: <strong class="text-[#E6EDF5]">{selectedFiling.period_end_date}</strong></span>
+        <span class="text-[#5E6D82]">ACCESSION: <code class="text-[#FFB000]">{selectedFiling.accession_number}</code></span>
         {#if selectedFiling.is_restated}
-          <span class="px-1.5 py-0.5 rounded bg-[#FF3366]/20 text-[#FF3366] text-3xs font-bold">
+          <span class="px-1.5 py-0.5 rounded bg-[#FF3344]/20 text-[#FF3344] text-3xs font-bold border border-[#FF3344]/40">
             RESTATEMENT DETECTED: {selectedFiling.restatement_delta_notes}
           </span>
         {/if}
       </div>
       <button
         onclick={() => (selectedFiling = null)}
-        class="px-2 py-0.5 rounded bg-[#182030] text-[#94A3B8] hover:text-white"
+        class="px-2 py-0.5 rounded bg-[#121824] border border-[#172033] text-[#8B98A5] hover:text-white transition-colors"
       >
         DISMISS
       </button>

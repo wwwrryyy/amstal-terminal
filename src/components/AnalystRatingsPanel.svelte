@@ -81,38 +81,27 @@
   let sellPct = $derived((anr.ratings_breakdown.sell / totalBreakdown) * 100);
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#0A0E17] border border-[#1E2638] rounded select-none overflow-hidden text-xs font-mono">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs font-mono">
   <!-- Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#111622] border-b border-[#1E2638]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033]">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
         onclick={cycleChannel}
         class="px-1.5 py-0.5 rounded text-2xs font-bold border transition-colors {channelColors[channel].bg} {channelColors[channel].text} {channelColors[channel].border}"
-        title="Color Channel Link (Click to cycle BLUE, AMBER, GREEN, RED, UNLINKED)"
+        title="Color Channel Link"
       >
         [{channel}]
       </button>
       <span class="font-bold text-[#FFB000]">ANR &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">ANALYST RECOMMENDATIONS & TARGETS</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FFB000] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("FA")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#E2E8F0] hover:bg-[#1E2638]">FA</button>
-          <button onclick={() => onSwitchFunction("DES")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00FF66] hover:bg-[#1E2638]">DES</button>
-          <button onclick={() => onSwitchFunction("COPILOT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FF9E00] hover:bg-[#1E2638]">AI</button>
-        </div>
-      {/if}
-
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
         >
           {isMaximized ? "RESTORE" : "MAX"}
         </button>
@@ -121,17 +110,17 @@
   </div>
 
   <!-- Content Container -->
-  <div class="flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto">
+  <div class="flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto bg-[#06090F]">
     <!-- Top KPI Grid -->
     <div class="grid grid-cols-4 gap-2">
       <!-- Consensus Rating Badge -->
-      <div class="p-2.5 bg-[#111622] border border-[#1E2638] rounded flex flex-col justify-between">
-        <span class="text-2xs text-[#64748B]">CONSENSUS RATING</span>
+      <div class="p-2.5 bg-[#0C111B] border border-[#172033] rounded flex flex-col justify-between">
+        <span class="text-2xs text-[#5E6D82]">CONSENSUS RATING</span>
         <div class="mt-1 flex items-center gap-2">
           <span class="px-2 py-0.5 text-xs font-bold rounded border {getRatingColor(anr.consensus_rating).bg} {getRatingColor(anr.consensus_rating).text} {getRatingColor(anr.consensus_rating).border}">
             {anr.consensus_rating.replace("_", " ")}
           </span>
-          <span class="text-2xs text-[#94A3B8]">{anr.total_analysts} ANALYSTS</span>
+          <span class="text-2xs text-[#8B98A5]">{anr.total_analysts} ANALYSTS</span>
         </div>
         <!-- 5-Star / 5-Point Rating Bar -->
         <div class="mt-2 flex items-center gap-1.5">

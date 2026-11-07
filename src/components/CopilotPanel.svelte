@@ -30,8 +30,8 @@
       id: "msg-welcome",
       sender: "SYSTEM",
       timestamp_iso: new Date().toISOString(),
-      text: "Amstal Quantitative AI Copilot v1.3 online. Powered by deterministic heuristic router and IPC semantic index. Ask questions regarding factor ranking, fractional Kelly sizing, forward-filtered HMM regimes, EDGAR redlines, or analyst consensus targets.",
-      sources: ["Amstal Engine v1.3", "Local IPC JSON-RPC 2.0"],
+      text: "Amstal AI Copilot online. Powered by quantitative heuristic router and IPC semantic index. Ask questions regarding factor ranking, fractional Kelly sizing, forward-filtered HMM regimes, EDGAR redlines, or analyst consensus targets.",
+      sources: ["Amstal Engine", "Local IPC JSON-RPC 2.0"],
       suggested_commands: ["NVDA PORT <GO>", "HMM <GO>", "NVDA ANR <GO>"],
     },
   ]);
@@ -125,9 +125,9 @@
   });
 </script>
 
-<div class="flex flex-col h-full w-full bg-[#0A0E17] border border-[#1E2638] rounded select-none overflow-hidden text-xs font-mono">
+<div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs font-mono">
   <!-- Subheader -->
-  <div class="flex items-center justify-between px-3 py-1.5 bg-[#111622] border-b border-[#1E2638]">
+  <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033]">
     <div class="flex items-center gap-2">
       <!-- Color Channel Link Pill -->
       <button
@@ -137,28 +137,18 @@
       >
         [{channel}]
       </button>
-      <span class="font-bold text-[#FF9E00]">COPILOT &lt;GO&gt;</span>
-      <span class="text-[#E2E8F0] font-semibold">{ticker} US</span>
-      <span class="text-[#64748B]">QUANTITATIVE AI COPILOT</span>
-      <span class="px-1.5 py-0.5 rounded bg-[#00FF66]/10 text-[#00FF66] border border-[#00FF66]/30 text-3xs font-bold">
-        ENGINE RPC / DETERMINISTIC ROUTER
+      <span class="font-bold text-[#FFB000]">COPILOT &lt;GO&gt;</span>
+      <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
+      <span class="px-1.5 py-0.2 rounded bg-[#00FF66]/10 text-[#00FF66] border border-[#00FF66]/30 text-3xs font-bold">
+        LOCAL ENGINE
       </span>
     </div>
 
     <div class="flex items-center gap-2">
-      {#if onSwitchFunction}
-        <div class="flex items-center gap-1 text-2xs">
-          <button onclick={() => onSwitchFunction("GP")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">GP</button>
-          <button onclick={() => onSwitchFunction("PORT")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#FFB000] hover:bg-[#1E2638]">PORT</button>
-          <button onclick={() => onSwitchFunction("HMM")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00FF66] hover:bg-[#1E2638]">HMM</button>
-          <button onclick={() => onSwitchFunction("ANR")} class="px-1.5 py-0.5 rounded bg-[#0A0E17] text-[#00D2FF] hover:bg-[#1E2638]">ANR</button>
-        </div>
-      {/if}
-
       {#if onToggleMaximize}
         <button
           onclick={onToggleMaximize}
-          class="px-2 py-0.5 text-2xs rounded border border-[#1E2638] bg-[#0A0E17] text-[#94A3B8] hover:text-white"
+          class="px-2 py-0.5 text-2xs rounded border border-[#172033] bg-[#06090F] text-[#8B98A5] hover:text-white transition-colors"
         >
           {isMaximized ? "RESTORE" : "MAX"}
         </button>
@@ -167,12 +157,12 @@
   </div>
 
   <!-- Suggested Chips Bar -->
-  <div class="flex items-center gap-1.5 px-3 py-1.5 bg-[#0D121F] border-b border-[#1E2638] overflow-x-auto text-2xs">
-    <span class="text-[#64748B] text-3xs uppercase font-bold tracking-wider mr-1">SUGGESTIONS:</span>
+  <div class="flex items-center gap-1.5 px-3 py-1 bg-[#090D16] border-b border-[#172033] overflow-x-auto text-2xs">
+    <span class="text-[#5E6D82] text-3xs uppercase font-bold tracking-wider mr-1">SUGGESTIONS:</span>
     {#each suggestedQueries as chip}
       <button
         onclick={() => handleSubmit(chip)}
-        class="px-2 py-0.5 rounded-full bg-[#111622] hover:bg-[#1E2638] text-[#00D2FF] border border-[#1E2638] text-3xs whitespace-nowrap transition-colors"
+        class="px-2 py-0.5 rounded-full bg-[#06090F] hover:bg-[#121824] text-[#00D2FF] border border-[#172033] text-3xs whitespace-nowrap transition-colors cursor-pointer"
       >
         {chip}
       </button>
@@ -180,16 +170,16 @@
   </div>
 
   <!-- Messages Chat Stream -->
-  <div bind:this={chatContainer} class="flex-1 p-3 overflow-y-auto space-y-3">
+  <div bind:this={chatContainer} class="flex-1 p-3 overflow-y-auto space-y-3 bg-[#06090F]">
     {#each messages as msg}
       {#if msg.sender === "USER"}
         <!-- User Chat Bubble -->
         <div class="flex flex-col items-end">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-3xs text-[#64748B]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
-            <span class="text-2xs font-bold text-[#FF9E00]">ANALYST</span>
+            <span class="text-3xs text-[#5E6D82]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
+            <span class="text-2xs font-bold text-[#FFB000]">ANALYST</span>
           </div>
-          <div class="max-w-[85%] p-2.5 rounded bg-[#182030] border border-[#1E2638] text-[#E2E8F0] text-xs leading-relaxed">
+          <div class="max-w-[85%] p-2.5 rounded bg-[#121824] border border-[#172033] text-[#E6EDF5] text-xs leading-relaxed">
             {msg.text}
           </div>
         </div>
@@ -197,19 +187,19 @@
         <!-- Copilot Response -->
         <div class="flex flex-col items-start">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-2xs font-bold text-[#00D2FF]">AMSTAL COPILOT</span>
+            <span class="text-2xs font-bold text-[#00D2FF]">Amstal Copilot</span>
             <span class="px-1.5 py-0.2 rounded bg-[#00D2FF]/10 text-[#00D2FF] text-3xs font-semibold">LOCAL ENGINE</span>
-            <span class="text-3xs text-[#64748B]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
+            <span class="text-3xs text-[#5E6D82]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
           </div>
-          <div class="max-w-[90%] p-3 rounded bg-[#111622] border border-[#1E2638] text-[#E2E8F0] text-xs leading-relaxed space-y-2">
+          <div class="max-w-[90%] p-3 rounded bg-[#0C111B] border border-[#172033] text-[#E6EDF5] text-xs leading-relaxed space-y-2">
             <p>{msg.text}</p>
 
             <!-- Sources tags -->
             {#if msg.sources && msg.sources.length > 0}
-              <div class="pt-1.5 border-t border-[#1E2638]/60 flex items-center gap-2 flex-wrap text-3xs text-[#64748B]">
-                <span class="font-bold text-[#94A3B8]">SOURCES:</span>
+              <div class="pt-1.5 border-t border-[#172033] flex items-center gap-2 flex-wrap text-3xs text-[#5E6D82]">
+                <span class="font-bold text-[#8B98A5]">SOURCES:</span>
                 {#each msg.sources as src}
-                  <span class="px-1.5 py-0.5 rounded bg-[#0A0E17] border border-[#1E2638] text-[#94A3B8]">
+                  <span class="px-1.5 py-0.5 rounded bg-[#06090F] border border-[#172033] text-[#8B98A5]">
                     {src}
                   </span>
                 {/each}
@@ -218,12 +208,12 @@
 
             <!-- Suggested Commands pills -->
             {#if msg.suggested_commands && msg.suggested_commands.length > 0}
-              <div class="pt-1.5 border-t border-[#1E2638]/60 flex items-center gap-2 flex-wrap text-3xs">
-                <span class="font-bold text-[#FF9E00]">EXECUTE:</span>
+              <div class="pt-1.5 border-t border-[#172033] flex items-center gap-2 flex-wrap text-3xs">
+                <span class="font-bold text-[#FFB000]">EXECUTE:</span>
                 {#each msg.suggested_commands as cmd}
                   <button
                     onclick={() => handleCommandClick(cmd)}
-                    class="px-2 py-0.5 rounded bg-[#0A0E17] hover:bg-[#1E2638] text-[#FF9E00] border border-[#FF9E00]/40 font-bold transition-colors cursor-pointer"
+                    class="px-2 py-0.5 rounded bg-[#06090F] hover:bg-[#121824] text-[#FFB000] border border-[#FFB000]/40 font-bold transition-colors cursor-pointer"
                     title={`Click to execute ${cmd}`}
                   >
                     {cmd}
@@ -235,19 +225,19 @@
         </div>
       {:else}
         <!-- System Message -->
-        <div class="p-2.5 rounded bg-[#0D121F] border border-[#1E2638]/80 text-[#94A3B8] text-2xs leading-relaxed">
+        <div class="p-2.5 rounded bg-[#0C111B] border border-[#172033] text-[#8B98A5] text-2xs leading-relaxed">
           <div class="flex items-center gap-2 mb-1">
-            <span class="text-3xs font-bold text-[#FFB000]">SYSTEM TELEMETRY</span>
-            <span class="text-3xs text-[#64748B]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
+            <span class="text-3xs font-bold text-[#FFB000]">TELEMETRY</span>
+            <span class="text-3xs text-[#5E6D82]">{msg.timestamp_iso.substring(11, 19)} UTC</span>
           </div>
           <p>{msg.text}</p>
           {#if msg.suggested_commands && msg.suggested_commands.length > 0}
             <div class="mt-2 flex items-center gap-2 flex-wrap text-3xs">
-              <span class="text-[#64748B]">QUICK MNEMONICS:</span>
+              <span class="text-[#5E6D82]">QUICK MNEMONICS:</span>
               {#each msg.suggested_commands as cmd}
                 <button
                   onclick={() => handleCommandClick(cmd)}
-                  class="px-2 py-0.5 rounded bg-[#111622] hover:bg-[#1E2638] text-[#00D2FF] border border-[#1E2638] font-bold"
+                  class="px-2 py-0.5 rounded bg-[#06090F] hover:bg-[#121824] text-[#00D2FF] border border-[#172033] font-bold cursor-pointer"
                 >
                   {cmd}
                 </button>
@@ -260,30 +250,30 @@
 
     {#if isThinking}
       <div class="flex items-center gap-2 text-2xs text-[#00D2FF] py-2 animate-pulse">
-        <span class="w-2 h-2 rounded-full bg-[#00D2FF]"></span>
-        <span>Querying Amstal Engine Heuristics & Local Semantics...</span>
+        <span class="w-1.5 h-1.5 rounded-full bg-[#00D2FF]"></span>
+        <span>Evaluating quantitative heuristics & local semantics...</span>
       </div>
     {/if}
   </div>
 
   <!-- Prompt Input Bar -->
-  <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="p-2.5 bg-[#111622] border-t border-[#1E2638]">
+  <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="p-2 bg-[#090D16] border-t border-[#172033]">
     <div class="relative flex items-center">
-      <span class="absolute left-3 text-[#FF9E00] text-2xs font-extrabold select-none">
-        AMSTAL COPILOT&gt;
+      <span class="absolute left-3 text-[#FFB000] text-2xs font-extrabold select-none">
+        AMSTAL&gt;
       </span>
       <input
         type="text"
         bind:value={inputQuery}
-        placeholder="ASK QUANT QUESTION OR ENTER COMMAND (e.g., NVDA Kelly Sizing)..."
-        class="w-full pl-36 pr-16 py-2 text-xs bg-[#0A0E17] border border-[#1E2638] rounded text-[#E2E8F0] placeholder-[#64748B] focus:outline-none focus:border-[#FF9E00] focus:ring-1 focus:ring-[#FF9E00]/40 transition-all font-mono"
+        placeholder="ASK QUANT QUESTION (e.g., NVDA Kelly Sizing)..."
+        class="w-full pl-24 pr-16 py-1.5 text-xs bg-[#06090F] border border-[#172033] rounded text-[#E6EDF5] placeholder-[#3B4758] focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/40 transition-all font-mono"
       />
       <button
         type="submit"
         disabled={isThinking || !inputQuery.trim()}
-        class="absolute right-1 px-3 py-1 text-2xs font-bold bg-[#FF9E00] text-black rounded hover:bg-[#E08A00] disabled:opacity-40 disabled:hover:bg-[#FF9E00] transition-colors"
+        class="absolute right-1 px-3 py-1 text-2xs font-bold bg-[#FFB000] text-black rounded hover:bg-[#E09900] disabled:opacity-30 disabled:hover:bg-[#FFB000] transition-colors cursor-pointer"
       >
-        ASK &lt;GO&gt;
+        GO
       </button>
     </div>
   </form>
