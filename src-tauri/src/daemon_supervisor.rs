@@ -42,19 +42,48 @@ impl DaemonSupervisor {
 
     /// Determines the absolute or relative path to `amstal-engine`.
     fn find_engine_dir() -> PathBuf {
-        let candidates = [
-            PathBuf::from("../amstal-engine"),
-            PathBuf::from("../../amstal-engine"),
-            PathBuf::from("amstal-engine"),
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .parent()
-                .map(|p| p.join("amstal-engine"))
-                .unwrap_or_else(|| PathBuf::from("../amstal-engine")),
-        ];
+        let mut candidates = Vec::new();
+
+        // 1. Explicit env var override
+        if let Ok(env_path) = std::env::var("AMSTAL_ENGINE_DIR") {
+            candidates.push(PathBuf::from(env_path));
+        }
+
+        // 2. Traversal up from current executable (works for packaged macOS .app & debug binaries)
+        if let Ok(exe_path) = std::env::current_exe() {
+            let mut curr = exe_path.as_path();
+            while let Some(parent) = curr.parent() {
+                candidates.push(parent.join("amstal-engine"));
+                candidates.push(parent.join("amstal").join("amstal-engine"));
+                curr = parent;
+            }
+        }
+
+        // 3. Current working directory and parent paths
+        if let Ok(cwd) = std::env::current_dir() {
+            candidates.push(cwd.join("amstal-engine"));
+            candidates.push(cwd.join("../amstal-engine"));
+            candidates.push(cwd.join("../../amstal-engine"));
+            if let Some(parent) = cwd.parent() {
+                candidates.push(parent.join("amstal-engine"));
+            }
+        }
+
+        // 4. Standard developer path in user home directory
+        if let Ok(home) = std::env::var("HOME") {
+            candidates.push(PathBuf::from(home).join("Projects/amstal/amstal-engine"));
+        }
+
+        // 5. Fallback relative paths
+        candidates.push(PathBuf::from("../amstal-engine"));
+        candidates.push(PathBuf::from("../../amstal-engine"));
+        candidates.push(PathBuf::from("amstal-engine"));
 
         for candidate in &candidates {
             if candidate.join("pyproject.toml").exists() || candidate.join("src/main.py").exists() {
+                if let Ok(canonical) = candidate.canonicalize() {
+                    return canonical;
+                }
                 return candidate.clone();
             }
         }
@@ -64,13 +93,17 @@ impl DaemonSupervisor {
 
     /// Determines the Python interpreter to use (.venv preferred).
     fn find_python_interpreter(engine_dir: &Path) -> PathBuf {
-        let venv_python = engine_dir.join(".venv/bin/python3");
+        let venv_python = engine_dir.join(".venv/bin/python");
         if venv_python.exists() {
             return venv_python;
         }
 
-        let sys_python = PathBuf::from("python3");
-        sys_python
+        let venv_python3 = engine_dir.join(".venv/bin/python3");
+        if venv_python3.exists() {
+            return venv_python3;
+        }
+
+        PathBuf::from("python3")
     }
 
     /// Checks whether the WebSocket port is responding to TCP handshake.
@@ -118,6 +151,21 @@ impl DaemonSupervisor {
 
     /// Spawns the engine daemon as a background child process if not already running.
     pub fn start(&mut self) -> Result<String, String> {
+        // First check if an engine daemon is already running and responding
+        let addr = format!("{}:{}", self.ws_host, self.ws_port);
+        if let Ok(stream) = std::net::TcpStream::connect_timeout(
+            &addr.parse().unwrap_or(([127, 0, 0, 1], self.ws_port).into()),
+            Duration::from_millis(300),
+        ) {
+            drop(stream);
+            return Ok("Engine daemon already running and responding on ws://127.0.0.1:8194".to_string());
+        }
+
+        // Clean up stale socket if present while server is dead
+        if Path::new(&self.socket_path).exists() {
+            let _ = std::fs::remove_file(&self.socket_path);
+        }
+
         let mut guard = self
             .child_process
             .lock()
@@ -133,15 +181,29 @@ impl DaemonSupervisor {
         let engine_dir = Self::find_engine_dir();
         let python_bin = Self::find_python_interpreter(&engine_dir);
 
-        let mut cmd = Command::new(python_bin);
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/amstal_engine.log")
+            .ok();
+
+        let stdout_cfg = log_file
+            .as_ref()
+            .and_then(|f| f.try_clone().ok())
+            .map(Stdio::from)
+            .unwrap_or(Stdio::null());
+
+        let stderr_cfg = log_file.map(Stdio::from).unwrap_or(Stdio::null());
+
+        let mut cmd = Command::new(&python_bin);
         cmd.args(["-m", "src.main"])
             .current_dir(&engine_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stdout(stdout_cfg)
+            .stderr(stderr_cfg);
 
         let child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn engine daemon: {}", e))?;
+            .map_err(|e| format!("Failed to spawn engine daemon using {:?} in {:?}: {}", python_bin, engine_dir, e))?;
 
         let pid = child.id();
         *guard = Some(child);

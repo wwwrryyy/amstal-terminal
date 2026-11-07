@@ -90,6 +90,9 @@
     updateClock();
     clockTimer = setInterval(updateClock, 1000);
 
+    // Automatically trigger engine daemon startup if running inside Tauri desktop workstation
+    ipcService.startEngine().catch(() => {});
+
     unsubscribeStatus = ipcService.subscribeStatus((state) => {
       connectionState = state;
     });
