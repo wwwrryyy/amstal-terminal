@@ -2,8 +2,9 @@
 //! Parses Starboard QMK/VIA keymaps and dispatches hardware macro keycodes (PRD Section 3.3).
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomKeycodeInfo {
     pub name: String,
@@ -113,3 +114,38 @@ pub fn process_hardware_macro(key_code: String) -> Result<MacroDispatchResult, S
         handled: action != "UNKNOWN_KEY",
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_hardware_macro() {
+        let go = process_hardware_macro("AM_GO".to_string()).unwrap();
+        assert_eq!(go.routed_action, "EXECUTE_GO");
+        assert!(go.handled);
+
+        let cancel = process_hardware_macro("AM_CANCEL".to_string()).unwrap();
+        assert_eq!(cancel.routed_action, "CANCEL_COMMAND");
+
+        let port = process_hardware_macro("AM_PORT".to_string()).unwrap();
+        assert_eq!(port.routed_action, "NAVIGATE_PANEL");
+        assert_eq!(port.mnemonic, Some("PORT".to_string()));
+
+        let enc0 = process_hardware_macro("AM_ENC0_CW".to_string()).unwrap();
+        assert_eq!(enc0.routed_action, "SCRUB_TIMELINE_FORWARD");
+
+        let unknown = process_hardware_macro("UNKNOWN_KEY_CODE".to_string()).unwrap();
+        assert_eq!(unknown.routed_action, "UNKNOWN_KEY");
+        assert!(!unknown.handled);
+    }
+
+    #[test]
+    fn test_get_starboard_layout() {
+        let layout = get_starboard_layout().unwrap();
+        assert_eq!(layout.vendor_id, "0x414D");
+        assert_eq!(layout.product_id, "0x5354");
+        assert!(layout.custom_keycodes_count > 0);
+    }
+}
+

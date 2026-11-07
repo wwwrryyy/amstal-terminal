@@ -74,6 +74,7 @@ impl DaemonSupervisor {
     }
 
     /// Checks whether the WebSocket port is responding to TCP handshake.
+    #[allow(dead_code)]
     pub async fn check_ws_alive(&self) -> bool {
         let addr = format!("{}:{}", self.ws_host, self.ws_port);
         tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(&addr))
@@ -83,6 +84,7 @@ impl DaemonSupervisor {
     }
 
     /// Computes full diagnostic status of the engine daemon.
+    #[allow(dead_code)]
     pub async fn get_status(&self) -> EngineStatus {
         let socket_exists = Path::new(&self.socket_path).exists();
         let ws_alive = self.check_ws_alive().await;
@@ -185,8 +187,47 @@ impl DaemonSupervisor {
 pub async fn check_engine_status(
     state: tauri::State<'_, Mutex<DaemonSupervisor>>,
 ) -> Result<EngineStatus, String> {
-    let supervisor = state.lock().map_err(|e| e.to_string())?;
-    Ok(supervisor.get_status().await)
+    let (socket_path, ws_host, ws_port, pid, start_time) = {
+        let guard = state.lock().map_err(|e| e.to_string())?;
+        let pid = guard
+            .child_process
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|c| c.id()));
+        (
+            guard.socket_path.clone(),
+            guard.ws_host.clone(),
+            guard.ws_port,
+            pid,
+            guard.start_time,
+        )
+    };
+
+    let addr = format!("{}:{}", ws_host, ws_port);
+    let ws_alive = tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(&addr))
+        .await
+        .map(|res| res.is_ok())
+        .unwrap_or(false);
+
+    let socket_exists = Path::new(&socket_path).exists();
+    let is_running = socket_exists || ws_alive;
+
+    let uptime_secs = if is_running {
+        start_time.map(|t| t.elapsed().as_secs()).unwrap_or(0)
+    } else {
+        0
+    };
+
+    Ok(EngineStatus {
+        is_running,
+        socket_path,
+        socket_exists,
+        ws_host,
+        ws_port,
+        ws_alive,
+        managed_child_pid: pid,
+        uptime_secs,
+    })
 }
 
 #[tauri::command]

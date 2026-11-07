@@ -128,19 +128,20 @@ pub fn query_parquet(sql_query: String) -> Result<QueryResult, String> {
         .prepare(&sql_query)
         .map_err(|e| format!("DuckDB SQL Prepare Error: {}", e))?;
 
-    let col_count = stmt.column_count();
-    let mut columns = Vec::with_capacity(col_count);
-    for idx in 0..col_count {
-        columns.push(stmt.column_name(idx).unwrap_or(format!("col_{}", idx)));
-    }
-
-    let mut rows_out = Vec::new();
     let mut rows = stmt
         .query([])
         .map_err(|e| format!("DuckDB Query Execution Error: {}", e))?;
 
+    let columns: Vec<String> = rows
+        .as_ref()
+        .map(|s| s.column_names())
+        .unwrap_or_default();
+    let col_count = columns.len();
+
+    let mut rows_out: Vec<HashMap<String, serde_json::Value>> = Vec::new();
+
     while let Some(row) = rows.next().map_err(|e| format!("DuckDB Row Fetch Error: {}", e))? {
-        let mut row_map = HashMap::with_capacity(col_count);
+        let mut row_map: HashMap<String, serde_json::Value> = HashMap::with_capacity(col_count);
         for idx in 0..col_count {
             let col_name = &columns[idx];
             let val = row.get_ref(idx).map_err(|e| format!("Cell Fetch Error: {}", e))?;
@@ -193,3 +194,38 @@ fn round_to(val: f64, places: u32) -> f64 {
     let mult = 10_f64.powi(places as i32);
     (val * mult).round() / mult
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_read_only_sql() {
+        assert!(validate_read_only_sql("SELECT * FROM prices").is_ok());
+        assert!(validate_read_only_sql("DESCRIBE prices").is_ok());
+        assert!(validate_read_only_sql("EXPLAIN SELECT 1").is_ok());
+
+        assert!(validate_read_only_sql("DROP TABLE prices").is_err());
+        assert!(validate_read_only_sql("DELETE FROM prices").is_err());
+        assert!(validate_read_only_sql("INSERT INTO prices VALUES (1)").is_err());
+        assert!(validate_read_only_sql("UPDATE prices SET x = 1").is_err());
+        assert!(validate_read_only_sql("ATTACH 'foo.db'").is_err());
+    }
+
+    #[test]
+    fn test_in_memory_duckdb_query() {
+        let res = query_parquet("SELECT 42 AS num, 'NVDA' AS ticker".to_string()).unwrap();
+        assert_eq!(res.row_count, 1);
+        assert_eq!(res.columns, vec!["num", "ticker"]);
+        assert_eq!(res.rows[0]["num"], 42);
+        assert_eq!(res.rows[0]["ticker"], "NVDA");
+        assert!(res.execution_time_ms >= 0.0);
+    }
+
+    #[test]
+    fn test_lakehouse_stats() {
+        let stats = get_lakehouse_stats().unwrap();
+        assert!(stats.base_lakehouse_path.contains("data"));
+    }
+}
+
