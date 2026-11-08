@@ -13,6 +13,9 @@ import type {
   AnalystRatingsData,
   CopilotQueryResponse,
 } from "./types";
+import { UNIVERSE_PRICES, UNIVERSE_METRICS } from "./universe_data";
+
+export { UNIVERSE_PRICES, UNIVERSE_METRICS };
 
 export const SAMPLE_TICKERS = ["NVDA", "AAPL", "MSFT", "CRWD", "SPY", "TSLA"];
 
@@ -26,7 +29,7 @@ export function createDefaultSignalFrame(ticker: string, priceOverride?: number)
     SPY: 574.8,
     TSLA: 248.9,
   };
-  const entryPrice = priceOverride ?? basePrices[t] ?? 100.0;
+  const entryPrice = priceOverride ?? UNIVERSE_PRICES[t] ?? basePrices[t] ?? 100.0;
   const atr = entryPrice * 0.035; // 3.5% ATR estimate
   const dynamicTakeProfit = +(entryPrice + 2.0 * atr).toFixed(2);
   const dynamicStopLoss = +(entryPrice - 1.0 * atr).toFixed(2);
@@ -167,7 +170,7 @@ export function generateHistoricalCandles(ticker: string, count: number = 90): O
     SPY: 574.8,
     TSLA: 248.9,
   };
-  const endPrice = basePrices[ticker.toUpperCase()] ?? 150.0;
+  const endPrice = UNIVERSE_PRICES[ticker.toUpperCase()] ?? basePrices[ticker.toUpperCase()] ?? 150.0;
   let price = endPrice * 0.82; // start 18% lower and walk up
 
   const startDate = new Date();
@@ -1527,8 +1530,32 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
       ceo: "Elon Musk",
       employees: 140473,
     },
+    BA: {
+      company_name: "The Boeing Company",
+      primary_exchange: "NYSE",
+      cik: "0000012927",
+      figi: "BBGABB53EC51",
+      gics_sector: "Industrials",
+      gics_sub_industry: "Aerospace & Defense",
+      beta_market_60d: 1.42,
+      beta_sector_60d: 1.18,
+      adv_30d_shares: 10790200,
+      market_cap_billions: 108.5,
+      pe_ratio_ltm: -28.4,
+      pe_forward: 38.6,
+      dividend_yield_pct: 0.0,
+      high_52w: 262.22,
+      low_52w: 137.03,
+      business_summary:
+        "The Boeing Company designs, develops, manufactures, sells, services, and supports commercial jetliners, defense and space systems, and provides aftermarket support services globally.",
+      headquarters: "Arlington, Virginia, USA",
+      ceo: "Kelly Ortberg",
+      employees: 171000,
+    },
   };
 
+  const um = UNIVERSE_METRICS[t];
+  const cp = UNIVERSE_PRICES[t] ?? 150.0;
   const p = profiles[t] || {
     company_name: `${t} Corporation`,
     primary_exchange: "NASDAQ GS",
@@ -1538,13 +1565,13 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
     gics_sub_industry: "Technology",
     beta_market_60d: 1.2,
     beta_sector_60d: 1.05,
-    adv_30d_shares: 12000000,
-    market_cap_billions: 120.0,
+    adv_30d_shares: um?.adv_30d ?? 12000000,
+    market_cap_billions: +(cp * 0.8).toFixed(1),
     pe_ratio_ltm: 28.0,
     pe_forward: 24.0,
     dividend_yield_pct: 0.5,
-    high_52w: 200.0,
-    low_52w: 120.0,
+    high_52w: um?.high_52w ?? +(cp * 1.25).toFixed(2),
+    low_52w: um?.low_52w ?? +(cp * 0.75).toFixed(2),
     business_summary: `${t} operates in enterprise technology markets delivering software and hardware systems.`,
     headquarters: "United States",
     ceo: "Executive Officer",
@@ -1561,13 +1588,13 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
     gics_sub_industry: p.gics_sub_industry ?? "Technology",
     beta_market_60d: p.beta_market_60d ?? 1.2,
     beta_sector_60d: p.beta_sector_60d ?? 1.0,
-    adv_30d_shares: p.adv_30d_shares ?? 20000000,
-    market_cap_billions: p.market_cap_billions ?? 150.0,
+    adv_30d_shares: p.adv_30d_shares ?? um?.adv_30d ?? 20000000,
+    market_cap_billions: p.market_cap_billions ?? +(cp * 0.8).toFixed(1),
     pe_ratio_ltm: p.pe_ratio_ltm ?? 30.0,
     pe_forward: p.pe_forward ?? 25.0,
     dividend_yield_pct: p.dividend_yield_pct ?? 0.0,
-    high_52w: p.high_52w ?? 200.0,
-    low_52w: p.low_52w ?? 100.0,
+    high_52w: p.high_52w ?? um?.high_52w ?? +(cp * 1.25).toFixed(2),
+    low_52w: p.low_52w ?? um?.low_52w ?? +(cp * 0.75).toFixed(2),
     business_summary: p.business_summary ?? `${t} operates enterprise technology platforms.`,
     headquarters: p.headquarters ?? "United States",
     ceo: p.ceo ?? "Executive",
@@ -1906,7 +1933,7 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
     SPY: 574.8,
     TSLA: 248.9,
   };
-  const endPrice = basePrices[t] ?? 150.0;
+  const endPrice = UNIVERSE_PRICES[t] ?? basePrices[t] ?? 150.0;
   const rows: import("./types").HistoricalPriceRow[] = [];
 
   let curClose = endPrice;
@@ -1970,7 +1997,7 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
     SPY: 574.8,
     TSLA: 248.9,
   };
-  const current_price = basePrices[t] ?? 150.0;
+  const current_price = UNIVERSE_PRICES[t] ?? basePrices[t] ?? 150.0;
 
   const dataset: Record<string, AnalystRatingsData> = {
     NVDA: {

@@ -27,6 +27,10 @@ pub struct LakehouseStats {
 
 fn locate_lakehouse_root() -> PathBuf {
     let candidates = [
+        PathBuf::from("../amstal-engine/lakehouse"),
+        PathBuf::from("../../amstal-engine/lakehouse"),
+        PathBuf::from("amstal-engine/lakehouse"),
+        PathBuf::from("lakehouse"),
         PathBuf::from("../amstal-engine/data"),
         PathBuf::from("../../amstal-engine/data"),
         PathBuf::from("amstal-engine/data"),
@@ -39,7 +43,7 @@ fn locate_lakehouse_root() -> PathBuf {
         }
     }
 
-    PathBuf::from("../amstal-engine/data")
+    PathBuf::from("../amstal-engine/lakehouse")
 }
 
 fn count_files_and_size(dir: &Path) -> (usize, u64) {
@@ -225,7 +229,8 @@ mod tests {
     #[test]
     fn test_lakehouse_stats() {
         let stats = get_lakehouse_stats().unwrap();
-        assert!(stats.base_lakehouse_path.contains("data"));
+        assert!(stats.base_lakehouse_path.contains("lakehouse") || stats.base_lakehouse_path.contains("data"));
+        assert!(stats.exists);
     }
 }
 

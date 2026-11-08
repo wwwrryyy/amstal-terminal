@@ -27,6 +27,7 @@ import {
   queryCopilot,
   SAMPLE_TICKERS,
 } from "./data_lake";
+import { UNIVERSE_PRICES, UNIVERSE_METRICS } from "./universe_data";
 import { parse_mnemonic_command } from "./mnemonic";
 
 export type ConnectionState = "CONNECTED" | "CONNECTING" | "SIMULATED_FALLBACK" | "DISCONNECTED";
@@ -103,7 +104,7 @@ export class IpcClientService {
     };
 
     for (const ticker of SAMPLE_TICKERS) {
-      const price = basePrices[ticker] ?? 100.0;
+      const price = UNIVERSE_PRICES[ticker] ?? basePrices[ticker] ?? 100.0;
       const change = +(Math.random() * 4.0 - 1.5).toFixed(2);
       const changePct = +((change / price) * 100).toFixed(2);
 
@@ -623,16 +624,18 @@ export class IpcClientService {
     const t = ticker.toUpperCase();
     let tick = this.ticks.get(t);
     if (!tick) {
+      const price = UNIVERSE_PRICES[t] ?? 150.0;
+      const um = UNIVERSE_METRICS[t];
       tick = {
         ticker: t,
-        price: 150.0,
-        change: 0.0,
-        change_pct: 0.0,
-        bid: 149.98,
-        ask: 150.02,
-        volume: 12000000,
-        high_24h: 152.0,
-        low_24h: 148.5,
+        price,
+        change: +(price * 0.0009).toFixed(2),
+        change_pct: 0.09,
+        bid: +(price - 0.02).toFixed(2),
+        ask: +(price + 0.02).toFixed(2),
+        volume: um?.adv_30d ?? 12000000,
+        high_24h: +(price * 1.015).toFixed(2),
+        low_24h: +(price * 0.985).toFixed(2),
         timestamp_ms: Date.now(),
       };
       this.ticks.set(t, tick);

@@ -299,4 +299,30 @@ describe("Data Lake & Quantitative Signal Provider", () => {
     const sum = pg.edges.reduce((acc, e) => acc + e.attention_weight, 0);
     expect(sum).toBeCloseTo(1.0, 2);
   });
+
+  it("resolves authentic universe pricing and security master metadata for non-hero symbols like BA", () => {
+    const sig = createDefaultSignalFrame("BA");
+    expect(sig.execution_recommendation.entry_price).toBe(176.55);
+    expect(sig.execution_recommendation.dynamic_take_profit).toBeGreaterThan(176.55);
+    expect(sig.execution_recommendation.dynamic_stop_loss).toBeLessThan(176.55);
+
+    const sm = getSecurityMaster("BA");
+    expect(sm.company_name).toBe("The Boeing Company");
+    expect(sm.primary_exchange).toBe("NYSE");
+    expect(sm.cik).toBe("0000012927");
+    expect(sm.gics_sector).toBe("Industrials");
+    expect(sm.gics_sub_industry).toBe("Aerospace & Defense");
+    expect(sm.high_52w).toBe(262.22);
+    expect(sm.low_52w).toBe(137.03);
+
+    const candles = generateHistoricalCandles("BA", 10);
+    expect(candles[candles.length - 1].close).toBeCloseTo(176.55, 1);
+
+    const hp = getHistoricalPrices("BA", 10);
+    expect(hp[0].close).toBe(176.55);
+
+    const anr = getAnalystRatings("BA");
+    expect(anr.current_price).toBe(176.55);
+    expect(anr.target_mean).toBeGreaterThan(176.55);
+  });
 });
