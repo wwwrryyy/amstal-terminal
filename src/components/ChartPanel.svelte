@@ -184,21 +184,29 @@
 
     loadData();
 
-    // Crosshair hover listener
+    // Crosshair hover listener with change guard to avoid unnecessary DOM diffing
     chart.subscribeCrosshairMove((param) => {
       if (!param || !param.time || !param.seriesData || !candleSeries) {
-        hoverData = null;
+        if (hoverData !== null) hoverData = null;
         return;
       }
       const candle = param.seriesData.get(candleSeries) as any;
       if (candle) {
-        hoverData = {
-          time: String(param.time),
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-        };
+        const timeStr = String(param.time);
+        if (
+          !hoverData ||
+          hoverData.time !== timeStr ||
+          hoverData.close !== candle.close ||
+          hoverData.open !== candle.open
+        ) {
+          hoverData = {
+            time: timeStr,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+          };
+        }
       }
     });
 
