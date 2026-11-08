@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { ipcService } from "../lib/ipc";
+  import { RECORDED_BARS } from "../lib/universe_bars";
   import type { MacroRegimeData } from "../lib/types";
 
   let {
@@ -118,39 +119,37 @@
     +(Math.log(0.5) / Math.log(transitionMatrix[2][2])).toFixed(1),
   ]);
 
-  // Forward-filtered 60-period dynamic regime history trajectory and P(S_2) risk sparkline
+  // Empirical 60-period regime history trajectory and P(S_2) risk sparkline derived from recorded SPY daily bars
   let historyTrajectory = $derived.by(() => {
-    const p0 = regime.filtered_probabilities.low_volatility;
-    const p1 = regime.filtered_probabilities.medium_volatility;
     const p2 = regime.filtered_probabilities.high_volatility;
     const currIdx = regime.state_index ?? 0;
 
-    const states: number[] = new Array(60);
-    const p2History: number[] = new Array(60);
+    const states: number[] = new Array(60).fill(currIdx);
+    const p2History: number[] = new Array(60).fill(p2);
 
-    // End at T_0 with the current filtered state and probability
-    states[59] = currIdx;
-    p2History[59] = p2;
-
-    let s = currIdx;
-    let currP2 = p2;
-    for (let t = 58; t >= 0; t--) {
-      // Deterministic hash based on macro regime state and time index
-      const seed = Math.sin(t * 12.9898 + (regime.current_state.charCodeAt(0) || 83)) * 43758.5453;
-      const rand = seed - Math.floor(seed);
-
-      const pStay = transitionMatrix[s][s];
-      if (rand > pStay) {
-        if (s === 0) s = 1;
-        else if (s === 2) s = 1;
-        else s = rand > 0.5 ? 0 : 2;
+    const spyBars = RECORDED_BARS["SPY"] || [];
+    if (spyBars.length >= 65) {
+      const start = spyBars.length - 60;
+      for (let t = 0; t < 59; t++) {
+        const idx = start + t;
+        // 5-day Parkinson high-low range volatility annualized
+        let sumHl = 0;
+        for (let k = Math.max(0, idx - 4); k <= idx; k++) {
+          const b = spyBars[k];
+          const hl = Math.log(Math.max(b.high, 0.01) / Math.max(b.low, 0.01));
+          sumHl += (hl * hl) / (4.0 * Math.LN2);
+        }
+        const annVol = Math.sqrt((sumHl / 5.0) * 252.0);
+        const s = annVol >= 0.24 ? 2 : annVol >= 0.14 ? 1 : 0;
+        states[t] = s;
+        const empP2 = Math.min(0.95, Math.max(0.01, (annVol - 0.09) / 0.35));
+        p2History[t] = +empP2.toFixed(3);
       }
-      states[t] = s;
-
-      const baseProb = s === 2 ? 0.65 + rand * 0.25 : s === 1 ? 0.08 + rand * 0.12 : 0.01 + rand * 0.03;
-      currP2 = 0.75 * currP2 + 0.25 * baseProb;
-      p2History[t] = +currP2.toFixed(3);
     }
+
+    // End at T_0 with the current forward-filtered state and probability
+    states[59] = currIdx;
+    p2History[59] = +p2.toFixed(3);
     return { states, p2History };
   });
 
@@ -287,7 +286,7 @@
         {#each historyStates as st}
           <div
             title={`Period state: ${st === 0 ? 'Low Vol (Calm)' : st === 1 ? 'Med Vol (Chop)' : 'Crash Vol (Crisis)'}`}
-            class="flex-1 h-full rounded-2xs transition-all {st === 0 ? 'bg-[#00FF66]/70 hover:bg-[#00FF66]' : st === 1 ? 'bg-[#FFB000]/70 hover:bg-[#FFB000]' : 'bg-[#FF3344]/80 hover:bg-[#FF3344]'}"
+            class="flex-1 h-full rounded-2xs transition-colors {st === 0 ? 'bg-[#00FF66]/70 hover:bg-[#00FF66]' : st === 1 ? 'bg-[#FFB000]/70 hover:bg-[#FFB000]' : 'bg-[#FF3344]/80 hover:bg-[#FF3344]'}"
           ></div>
         {/each}
       </div>

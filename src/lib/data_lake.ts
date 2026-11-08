@@ -3,8 +3,6 @@ import type {
   FinancialMetricRow,
   OHLCVBar,
   QARESignalFrame,
-  MacroRegimeData,
-  TickData,
   SecurityMasterData,
   PeerGraphData,
   EdgarFilingRedlineData,
@@ -22,16 +20,20 @@ export const SAMPLE_TICKERS = ["NVDA", "AAPL", "MSFT", "CRWD", "SPY", "TSLA"];
 
 export function createDefaultSignalFrame(ticker: string, priceOverride?: number): QARESignalFrame {
   const t = ticker.toUpperCase();
-  const basePrices: Record<string, number> = {
-    NVDA: 138.25,
-    AAPL: 224.5,
-    MSFT: 421.15,
-    CRWD: 312.4,
-    SPY: 574.8,
-    TSLA: 248.9,
-  };
-  const entryPrice = priceOverride ?? UNIVERSE_PRICES[t] ?? basePrices[t] ?? 100.0;
-  const atr = entryPrice * 0.035; // 3.5% ATR estimate
+  const um = UNIVERSE_METRICS[t];
+  const entryPrice = priceOverride ?? um?.close ?? UNIVERSE_PRICES[t] ?? 0.0;
+  const bars = RECORDED_BARS[t] || [];
+  let atr = entryPrice * 0.035;
+  if (bars.length >= 21) {
+    let trSum = 0;
+    for (let i = bars.length - 20; i < bars.length; i++) {
+      const b = bars[i];
+      const prevC = bars[i - 1].close;
+      const tr = Math.max(b.high - b.low, Math.abs(b.high - prevC), Math.abs(b.low - prevC));
+      trSum += tr;
+    }
+    atr = trSum / 20.0;
+  }
   const dynamicTakeProfit = +(entryPrice + 2.0 * atr).toFixed(2);
   const dynamicStopLoss = +(entryPrice - 1.0 * atr).toFixed(2);
 
@@ -1507,7 +1509,7 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
   };
 
   const um = UNIVERSE_METRICS[t];
-  const cp = UNIVERSE_PRICES[t] ?? 150.0;
+  const cp = um?.close ?? UNIVERSE_PRICES[t] ?? 0.0;
   const p = profiles[t] || {
     company_name: `${t} Corporation`,
     primary_exchange: "NASDAQ GS",
@@ -1517,13 +1519,13 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
     gics_sub_industry: "Technology",
     beta_market_60d: 1.2,
     beta_sector_60d: 1.05,
-    adv_30d_shares: um?.adv_30d ?? 12000000,
+    adv_30d_shares: um?.adv_30d ?? 0,
     market_cap_billions: +(cp * 0.8).toFixed(1),
     pe_ratio_ltm: 28.0,
     pe_forward: 24.0,
     dividend_yield_pct: 0.5,
-    high_52w: um?.high_52w ?? +(cp * 1.25).toFixed(2),
-    low_52w: um?.low_52w ?? +(cp * 0.75).toFixed(2),
+    high_52w: um?.high_52w ?? cp,
+    low_52w: um?.low_52w ?? cp,
     business_summary: `${t} operates in enterprise technology markets delivering software and hardware systems.`,
     headquarters: "United States",
     ceo: "Executive Officer",
@@ -1540,13 +1542,13 @@ export function getSecurityMaster(ticker: string): import("./types").SecurityMas
     gics_sub_industry: p.gics_sub_industry ?? "Technology",
     beta_market_60d: p.beta_market_60d ?? 1.2,
     beta_sector_60d: p.beta_sector_60d ?? 1.0,
-    adv_30d_shares: p.adv_30d_shares ?? um?.adv_30d ?? 20000000,
+    adv_30d_shares: um?.adv_30d ?? p.adv_30d_shares ?? 0,
     market_cap_billions: p.market_cap_billions ?? +(cp * 0.8).toFixed(1),
     pe_ratio_ltm: p.pe_ratio_ltm ?? 30.0,
     pe_forward: p.pe_forward ?? 25.0,
     dividend_yield_pct: p.dividend_yield_pct ?? 0.0,
-    high_52w: p.high_52w ?? um?.high_52w ?? +(cp * 1.25).toFixed(2),
-    low_52w: p.low_52w ?? um?.low_52w ?? +(cp * 0.75).toFixed(2),
+    high_52w: um?.high_52w ?? p.high_52w ?? cp,
+    low_52w: um?.low_52w ?? p.low_52w ?? cp,
     business_summary: p.business_summary ?? `${t} operates enterprise technology platforms.`,
     headquarters: p.headquarters ?? "United States",
     ceo: p.ceo ?? "Executive",
@@ -1628,24 +1630,32 @@ export function getPeerGraph(ticker: string): import("./types").PeerGraphData {
   };
 
   const map = peerMaps[t] || {
-    gics: ["PEER1", "PEER2", "PEER3", "PEER4"],
+    gics: ["AMD", "AVGO", "QCOM", "INTC"],
     leadLag: [
-      { sym: "LL1", corr: 0.58 },
-      { sym: "LL2", corr: 0.52 },
-      { sym: "LL3", corr: 0.48 },
-      { sym: "LL4", corr: 0.44 },
+      { sym: "NVDA", corr: 0.58 },
+      { sym: "MSFT", corr: 0.52 },
+      { sym: "AAPL", corr: 0.48 },
+      { sym: "AMZN", corr: 0.44 },
     ],
     etf: "XLK",
   };
 
+  function calcRet5d(sym: string): number {
+    const b = RECORDED_BARS[sym] || [];
+    if (b.length < 6) return 0.0;
+    const cNow = b[b.length - 1].close;
+    const cPrev = b[b.length - 6].close;
+    return cPrev > 0 ? +(((cNow - cPrev) / cPrev) * 100).toFixed(2) : 0.0;
+  }
+
   // Node 0: Target
   const nodes: import("./types").PeerGraphNode[] = [
-    { id: t, role: "TARGET", role_code: 0.0, label: t, beta_market: 1.25 },
+    { id: t, role: "TARGET", role_code: 0.0, label: t, beta_market: 1.25, return_5d: calcRet5d(t) },
   ];
 
   // Nodes 1..4: GICS Peers
   map.gics.forEach((sym) => {
-    nodes.push({ id: sym, role: "GICS_PEER", role_code: 0.33, label: sym, beta_market: 1.15 });
+    nodes.push({ id: sym, role: "GICS_PEER", role_code: 0.33, label: sym, beta_market: 1.15, return_5d: calcRet5d(sym) });
   });
 
   // Nodes 5..8: Lead-Lag Peers
@@ -1657,11 +1667,12 @@ export function getPeerGraph(ticker: string): import("./types").PeerGraphData {
       label: item.sym,
       cross_corr_5d: item.corr,
       beta_market: 1.1,
+      return_5d: calcRet5d(item.sym),
     });
   });
 
   // Node 9: Sector ETF
-  nodes.push({ id: map.etf, role: "SECTOR_ETF", role_code: 1.0, label: map.etf, beta_market: 1.0 });
+  nodes.push({ id: map.etf, role: "SECTOR_ETF", role_code: 1.0, label: map.etf, beta_market: 1.0, return_5d: calcRet5d(map.etf) });
 
   // Edges with normalized attention weights summing to 1.000
   const rawEdges: import("./types").PeerGraphEdge[] = [
@@ -1917,25 +1928,17 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
 
 export function getAnalystRatings(ticker: string): AnalystRatingsData {
   const t = ticker.toUpperCase();
-  const basePrices: Record<string, number> = {
-    NVDA: 138.25,
-    AAPL: 224.5,
-    MSFT: 421.15,
-    CRWD: 312.4,
-    SPY: 574.8,
-    TSLA: 248.9,
-  };
-  const current_price = UNIVERSE_PRICES[t] ?? basePrices[t] ?? 150.0;
+  const current_price = UNIVERSE_METRICS[t]?.close ?? UNIVERSE_PRICES[t] ?? 0.0;
 
   const dataset: Record<string, AnalystRatingsData> = {
     NVDA: {
       ticker: "NVDA",
-      current_price: 138.25,
+      current_price,
       target_mean: 172.5,
       target_median: 170.0,
       target_high: 200.0,
       target_low: 125.0,
-      upside_pct: 24.8,
+      upside_pct: +(((172.5 - current_price) / Math.max(current_price, 0.01)) * 100).toFixed(1),
       consensus_rating: "STRONG_BUY",
       consensus_score: 4.75,
       total_analysts: 48,
@@ -1955,12 +1958,12 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
     },
     AAPL: {
       ticker: "AAPL",
-      current_price: 224.5,
-      target_mean: 245.0,
-      target_median: 242.0,
-      target_high: 275.0,
-      target_low: 195.0,
-      upside_pct: 9.1,
+      current_price,
+      target_mean: 265.0,
+      target_median: 262.0,
+      target_high: 295.0,
+      target_low: 215.0,
+      upside_pct: +(((265.0 - current_price) / Math.max(current_price, 0.01)) * 100).toFixed(1),
       consensus_rating: "BUY",
       consensus_score: 4.15,
       total_analysts: 42,
@@ -1972,20 +1975,20 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
         sell: 0,
       },
       historical_revisions: [
-        { period: "Current", mean_target: 245.0, buy_pct: 81.0 },
-        { period: "1M Ago", mean_target: 240.0, buy_pct: 79.5 },
-        { period: "2M Ago", mean_target: 232.0, buy_pct: 76.0 },
-        { period: "3M Ago", mean_target: 225.0, buy_pct: 74.0 },
+        { period: "Current", mean_target: 265.0, buy_pct: 81.0 },
+        { period: "1M Ago", mean_target: 258.0, buy_pct: 79.5 },
+        { period: "2M Ago", mean_target: 250.0, buy_pct: 76.0 },
+        { period: "3M Ago", mean_target: 242.0, buy_pct: 74.0 },
       ],
     },
     MSFT: {
       ticker: "MSFT",
-      current_price: 421.15,
+      current_price,
       target_mean: 495.0,
       target_median: 500.0,
       target_high: 550.0,
       target_low: 440.0,
-      upside_pct: 17.5,
+      upside_pct: +(((495.0 - current_price) / Math.max(current_price, 0.01)) * 100).toFixed(1),
       consensus_rating: "STRONG_BUY",
       consensus_score: 4.82,
       total_analysts: 45,
@@ -2005,12 +2008,12 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
     },
     CRWD: {
       ticker: "CRWD",
-      current_price: 312.4,
-      target_mean: 345.0,
-      target_median: 340.0,
-      target_high: 390.0,
-      target_low: 260.0,
-      upside_pct: 10.4,
+      current_price,
+      target_mean: 385.0,
+      target_median: 380.0,
+      target_high: 420.0,
+      target_low: 310.0,
+      upside_pct: +(((385.0 - current_price) / Math.max(current_price, 0.01)) * 100).toFixed(1),
       consensus_rating: "BUY",
       consensus_score: 4.2,
       total_analysts: 38,
@@ -2022,20 +2025,20 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
         sell: 0,
       },
       historical_revisions: [
-        { period: "Current", mean_target: 345.0, buy_pct: 84.2 },
-        { period: "1M Ago", mean_target: 338.0, buy_pct: 82.0 },
-        { period: "2M Ago", mean_target: 320.0, buy_pct: 75.0 },
-        { period: "3M Ago", mean_target: 310.0, buy_pct: 70.0 },
+        { period: "Current", mean_target: 385.0, buy_pct: 84.2 },
+        { period: "1M Ago", mean_target: 372.0, buy_pct: 82.0 },
+        { period: "2M Ago", mean_target: 355.0, buy_pct: 75.0 },
+        { period: "3M Ago", mean_target: 340.0, buy_pct: 70.0 },
       ],
     },
     TSLA: {
       ticker: "TSLA",
-      current_price: 248.9,
-      target_mean: 260.0,
-      target_median: 250.0,
-      target_high: 330.0,
-      target_low: 115.0,
-      upside_pct: 4.5,
+      current_price,
+      target_mean: 415.0,
+      target_median: 410.0,
+      target_high: 500.0,
+      target_low: 250.0,
+      upside_pct: +(((415.0 - current_price) / Math.max(current_price, 0.01)) * 100).toFixed(1),
       consensus_rating: "HOLD",
       consensus_score: 3.25,
       total_analysts: 35,
@@ -2047,10 +2050,10 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
         sell: 2,
       },
       historical_revisions: [
-        { period: "Current", mean_target: 260.0, buy_pct: 57.1 },
-        { period: "1M Ago", mean_target: 255.0, buy_pct: 56.0 },
-        { period: "2M Ago", mean_target: 245.0, buy_pct: 52.0 },
-        { period: "3M Ago", mean_target: 230.0, buy_pct: 48.0 },
+        { period: "Current", mean_target: 415.0, buy_pct: 57.1 },
+        { period: "1M Ago", mean_target: 385.0, buy_pct: 56.0 },
+        { period: "2M Ago", mean_target: 350.0, buy_pct: 52.0 },
+        { period: "3M Ago", mean_target: 310.0, buy_pct: 48.0 },
       ],
     },
   };
@@ -2059,7 +2062,7 @@ export function getAnalystRatings(ticker: string): AnalystRatingsData {
 
   // Generic fallback
   const meanTarget = +(current_price * 1.15).toFixed(2);
-  const upsidePct = +(((meanTarget - current_price) / current_price) * 100).toFixed(1);
+  const upsidePct = current_price > 0 ? +(((meanTarget - current_price) / current_price) * 100).toFixed(1) : 0.0;
   return {
     ticker: t,
     current_price,

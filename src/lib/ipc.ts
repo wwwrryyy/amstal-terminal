@@ -14,7 +14,6 @@ import {
   type EngineStatus,
   type LakehouseStats,
   type ParquetQueryResult,
-  type MacroDispatchResult,
 } from "./types";
 import {
   createDefaultSignalFrame,
@@ -96,7 +95,7 @@ export class IpcClientService {
   private initDefaultData(): void {
     for (const ticker of SAMPLE_TICKERS) {
       const m = UNIVERSE_METRICS[ticker];
-      const price = m?.close ?? UNIVERSE_PRICES[ticker] ?? 100.0;
+      const price = m?.close ?? UNIVERSE_PRICES[ticker] ?? 0.0;
       const change = m?.change ?? 0.0;
       const changePct = m?.change_pct ?? 0.0;
 
@@ -107,9 +106,9 @@ export class IpcClientService {
         change_pct: changePct,
         bid: price,
         ask: price,
-        volume: m?.adv_30d ?? 15000000,
-        high_24h: m?.high_52w ?? +(price * 1.025).toFixed(2),
-        low_24h: m?.low_52w ?? +(price * 0.985).toFixed(2),
+        volume: m?.adv_30d ?? 0,
+        high_24h: m?.high_52w ?? price,
+        low_24h: m?.low_52w ?? price,
         timestamp_ms: Date.now(),
       });
 
@@ -297,7 +296,7 @@ export class IpcClientService {
 
         const timeout = setTimeout(() => {
           this.ws?.removeEventListener("message", tempHandler);
-          resolve(this.mockJsonRpcResponse(method, params, id));
+          resolve(this.localLakehouseRpcResponse(method, params, id));
         }, 1500);
 
         this.ws?.addEventListener("message", tempHandler);
@@ -313,12 +312,10 @@ export class IpcClientService {
     }
 
     // Fallback: synchronous institutional response provider matching engine logic
-    return this.mockJsonRpcResponse(method, params, id);
+    return this.localLakehouseRpcResponse(method, params, id);
   }
 
-  private mockJsonRpcResponse<T = any>(method: string, params: Record<string, any>, id: number): JsonRpcResponse<T> {
-    const start = Date.now();
-
+  private localLakehouseRpcResponse<T = any>(method: string, params: Record<string, any>, id: number): JsonRpcResponse<T> {
     switch (method) {
       case "ping":
         return {
@@ -626,20 +623,6 @@ export class IpcClientService {
       processed_partitions_count: 250,
       universe_snapshots_count: 10,
       total_size_bytes: 52428800,
-    };
-  }
-
-  public async processHardwareMacro(keyCode: string): Promise<MacroDispatchResult> {
-    if (this.isTauriDesktop()) {
-      return this.invokeTauri<MacroDispatchResult>("process_hardware_macro", { keyCode });
-    }
-    const kc = keyCode.toUpperCase();
-    const action = kc === "AM_GO" ? "EXECUTE_GO" : kc === "AM_CANCEL" ? "CANCEL_COMMAND" : "NAVIGATE_PANEL";
-    return {
-      key_code: kc,
-      routed_action: action,
-      mnemonic: kc.startsWith("AM_") ? kc.slice(3) : null,
-      handled: true,
     };
   }
 

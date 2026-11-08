@@ -511,7 +511,7 @@
             }}
             role="region"
             aria-label={`Workstation Panel Slot ${slotIdx + 1}`}
-            class="min-h-0 min-w-0 h-full rounded transition-all {focusedSlot === slotIdx ? 'ring-1 ring-[#FFB000]/70 border border-[#FFB000]/40' : 'border border-[#172033]'}"
+            class="min-h-0 min-w-0 h-full rounded transition-colors {focusedSlot === slotIdx ? 'ring-1 ring-[#FFB000]/70 border border-[#FFB000]/40' : 'border border-[#172033]'}"
           >
             {#if slotFunctions[slotIdx] === "GP"}
               <ChartPanel

@@ -148,14 +148,6 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     expect(parquetRes.columns).toContain("ticker");
     expect(parquetRes.row_count).toBeGreaterThan(0);
     expect(parquetRes.execution_time_ms).toBeGreaterThan(0);
-
-    const macroRes = await ipc.processHardwareMacro("AM_GO");
-    expect(macroRes.handled).toBe(true);
-    expect(macroRes.routed_action).toBe("EXECUTE_GO");
-
-    const macroNav = await ipc.processHardwareMacro("AM_PORT");
-    expect(macroNav.handled).toBe(true);
-    expect(macroNav.mnemonic).toBe("PORT");
   });
 
   it("returns -32601 error for unknown methods", async () => {

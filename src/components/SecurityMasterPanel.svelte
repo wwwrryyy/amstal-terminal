@@ -19,7 +19,7 @@
   } = $props();
 
   let master = $derived<SecurityMasterData>(ipcService.getSecurityMaster(ticker));
-  let currentPrice = $derived(ipcService.getTick(ticker)?.price ?? 138.25);
+  let currentPrice = $derived(ipcService.getTick(ticker)?.price ?? 0);
   let rangePct = $derived(
     Math.min(100, Math.max(0, ((currentPrice - master.low_52w) / Math.max(0.01, master.high_52w - master.low_52w)) * 100))
   );

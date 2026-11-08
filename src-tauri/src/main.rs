@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod daemon_supervisor;
-mod keyboard;
 mod parquet_query;
 
 use daemon_supervisor::DaemonSupervisor;
@@ -37,8 +36,6 @@ fn main() {
             daemon_supervisor::restart_engine,
             parquet_query::query_parquet,
             parquet_query::get_lakehouse_stats,
-            keyboard::get_starboard_layout,
-            keyboard::process_hardware_macro,
         ])
         .build(tauri::generate_context!())
         .expect("error while building amstal-terminal")

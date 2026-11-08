@@ -159,6 +159,8 @@ export interface PeerGraphNode {
   label: string;
   cross_corr_5d?: number;
   beta_market?: number;
+  return_5d?: number;
+  spillover_contribution?: number;
 }
 
 export interface PeerGraphEdge {
@@ -289,17 +291,8 @@ export interface LakehouseStats {
 
 export interface ParquetQueryResult {
   columns: string[];
-  rows: Array<Record<string, any>>;
+  rows: Array<Array<string | number | boolean | null> | Record<string, any>>;
   row_count: number;
   execution_time_ms: number;
 }
-
-export interface MacroDispatchResult {
-  key_code: string;
-  routed_action: string;
-  mnemonic?: string | null;
-  handled: boolean;
-}
-
-
 

@@ -267,8 +267,9 @@
         bind:value={inputQuery}
         aria-label="Ask Amstal Quant Copilot"
         autocomplete="off"
+        spellcheck="false"
         placeholder="ASK QUANT QUESTION (e.g., NVDA Kelly Sizing)…"
-        class="w-full pl-24 pr-16 py-1.5 text-xs bg-[#06090F] border border-[#172033] rounded text-[#E6EDF5] placeholder-[#3B4758] focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/40 transition-all font-mono"
+        class="w-full pl-24 pr-16 py-1.5 text-xs bg-[#06090F] border border-[#172033] rounded text-[#E6EDF5] placeholder-[#3B4758] focus:outline-none focus:border-[#FFB000] focus:ring-1 focus:ring-[#FFB000]/40 transition-colors font-mono"
       />
       <button
         type="submit"
