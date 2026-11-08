@@ -302,12 +302,10 @@
         title={!marketOpen ? "US Equity Session: CLOSED (Weekend / After-hours: quotes frozen at Friday closing print)" : "US Equity Session: OPEN (Streaming continuous real-time quotes)"}
       >
         <span
-          class="w-1.5 h-1.5 rounded-full {!marketOpen && connectionState === 'CONNECTED'
-            ? 'bg-[#8B98A5]'
-            : connectionState === 'CONNECTED'
+          class="w-1.5 h-1.5 rounded-full {connectionState === 'CONNECTED' && marketOpen
             ? 'bg-[#00FF66] shadow-[0_0_6px_#00FF66]'
-            : connectionState === 'SIMULATED_FALLBACK'
-              ? 'bg-[#00D2FF]'
+            : connectionState === 'CONNECTED' && !marketOpen
+              ? 'bg-[#8B98A5]'
               : connectionState === 'CONNECTING'
                 ? 'bg-[#FFB000] animate-ping'
                 : 'bg-[#FF3344]'}"
@@ -315,11 +313,9 @@
         <span class="font-medium text-[#8B98A5]">
           {connectionState === "CONNECTED"
             ? (marketOpen ? "LIVE" : "CLOSED")
-            : connectionState === "SIMULATED_FALLBACK"
-              ? (marketOpen ? "SIM" : "SIM [CLOSED]")
-              : connectionState === "CONNECTING"
-                ? "SYNC"
-                : "OFFLINE"}
+            : connectionState === "CONNECTING"
+              ? "CONNECTING"
+              : (!marketOpen ? "CLOSED" : "DISCONNECTED")}
         </span>
         <span class="text-[#475569]">[{latencyMs}ms]</span>
       </div>

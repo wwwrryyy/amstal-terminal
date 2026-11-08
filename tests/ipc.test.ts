@@ -13,8 +13,8 @@ describe("IPC Client Service & JSON-RPC Protocol", () => {
     ipc.destroy();
   });
 
-  it("initializes with connecting state and falls back to simulated stream when daemon is offline", async () => {
-    expect(["CONNECTING", "SIMULATED_FALLBACK"]).toContain(ipc.connectionState);
+  it("initializes with connecting or disconnected state when daemon is offline", async () => {
+    expect(["CONNECTING", "DISCONNECTED"]).toContain(ipc.connectionState);
     expect(ipc.ticks.has("NVDA")).toBe(true);
     expect(ipc.signals.has("NVDA")).toBe(true);
   });

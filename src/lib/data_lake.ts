@@ -14,8 +14,9 @@ import type {
   CopilotQueryResponse,
 } from "./types";
 import { UNIVERSE_PRICES, UNIVERSE_METRICS } from "./universe_data";
+import { RECORDED_BARS } from "./universe_bars";
 
-export { UNIVERSE_PRICES, UNIVERSE_METRICS };
+export { UNIVERSE_PRICES, UNIVERSE_METRICS, RECORDED_BARS };
 
 export const SAMPLE_TICKERS = ["NVDA", "AAPL", "MSFT", "CRWD", "SPY", "TSLA"];
 
@@ -161,61 +162,12 @@ export function createDefaultSignalFrame(ticker: string, priceOverride?: number)
 }
 
 export function generateHistoricalCandles(ticker: string, count: number = 90): OHLCVBar[] {
-  const bars: OHLCVBar[] = [];
-  const basePrices: Record<string, number> = {
-    NVDA: 138.25,
-    AAPL: 224.5,
-    MSFT: 421.15,
-    CRWD: 312.4,
-    SPY: 574.8,
-    TSLA: 248.9,
-  };
-  const endPrice = UNIVERSE_PRICES[ticker.toUpperCase()] ?? basePrices[ticker.toUpperCase()] ?? 150.0;
-  let price = endPrice * 0.82; // start 18% lower and walk up
-
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - count * 1.45);
-
-  let curDate = new Date(startDate);
-  for (let i = 0; i < count; i++) {
-    // skip weekends
-    while (curDate.getDay() === 0 || curDate.getDay() === 6) {
-      curDate.setDate(curDate.getDate() + 1);
-    }
-
-    const dateStr = curDate.toISOString().split("T")[0];
-    const dailyVol = price * 0.022;
-    const drift = (endPrice - price) / (count - i + 5);
-    const delta = (Math.random() - 0.48) * dailyVol * 1.5 + drift;
-    const open = +(price).toFixed(2);
-    const close = +(price + delta).toFixed(2);
-    const high = +(Math.max(open, close) + Math.random() * dailyVol * 0.8).toFixed(2);
-    const low = +(Math.min(open, close) - Math.random() * dailyVol * 0.8).toFixed(2);
-    const volume = Math.floor(10000000 + Math.random() * 35000000);
-
-    bars.push({
-      time: dateStr,
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
-
-    price = close;
-    curDate.setDate(curDate.getDate() + 1);
+  const t = ticker.toUpperCase();
+  const recorded = RECORDED_BARS[t];
+  if (!recorded || recorded.length === 0) {
+    return []; // Blank GP when unrecorded / market closed without data
   }
-
-  // Ensure last bar (T_0) reflects current session (+0.09% green body, wicks cleanly within TP/SL barriers)
-  if (bars.length > 0) {
-    const last = bars[bars.length - 1];
-    last.close = endPrice;
-    last.open = +(endPrice * 0.9991).toFixed(2);
-    last.high = +(last.close + 0.35).toFixed(2);
-    last.low = +(last.open - 0.25).toFixed(2);
-  }
-
-  return bars;
+  return recorded.slice(-count);
 }
 
 export function getFilingMetadata(ticker: string): FinancialFilingMetadata[] {
@@ -1925,50 +1877,29 @@ export function getNewsFeed(ticker: string): import("./types").NewsItemData[] {
 
 export function getHistoricalPrices(ticker: string, count: number = 30): import("./types").HistoricalPriceRow[] {
   const t = ticker.toUpperCase();
-  const basePrices: Record<string, number> = {
-    NVDA: 138.25,
-    AAPL: 224.5,
-    MSFT: 421.15,
-    CRWD: 312.4,
-    SPY: 574.8,
-    TSLA: 248.9,
-  };
-  const endPrice = UNIVERSE_PRICES[t] ?? basePrices[t] ?? 150.0;
+  const recorded = RECORDED_BARS[t];
+  if (!recorded || recorded.length < 2) {
+    return [];
+  }
+  const slice = recorded.slice(-Math.min(count + 1, recorded.length));
   const rows: import("./types").HistoricalPriceRow[] = [];
 
-  let curClose = endPrice;
-  const cursorDate = new Date();
-  let seed = t.split("").reduce((acc, c) => acc + c.charCodeAt(0), 17);
-  const nextRand = () => {
-    seed = (seed * 1664525 + 1013904223) % 4294967296;
-    return seed / 4294967296;
-  };
-
-  for (let i = 0; i < count; i++) {
-    while (cursorDate.getDay() === 0 || cursorDate.getDay() === 6) {
-      cursorDate.setDate(cursorDate.getDate() - 1);
-    }
-    const dateStr = cursorDate.toISOString().split("T")[0];
-
-    const intradayShockPct = (nextRand() - 0.47) * 0.028;
-    const overnightShockPct = (nextRand() - 0.48) * 0.014;
-
-    const close = +curClose.toFixed(2);
-    const open = +(close / (1 + intradayShockPct)).toFixed(2);
-    const prevClose = +(open / (1 + overnightShockPct)).toFixed(2);
-
-    const span = Math.abs(close - open) + close * 0.006;
-    const high = +(Math.max(open, close) + nextRand() * span * 0.65).toFixed(2);
-    const low = +(Math.min(open, close) - nextRand() * span * 0.65).toFixed(2);
-    const volume = Math.floor(18000000 + nextRand() * 32000000);
+  for (let i = slice.length - 1; i >= 1; i--) {
+    const cur = slice[i];
+    const prev = slice[i - 1];
+    const prevClose = prev.close;
+    const open = cur.open;
+    const high = cur.high;
+    const low = cur.low;
+    const close = cur.close;
+    const volume = cur.volume;
     const vwap = +((high + low + close) / 3).toFixed(2);
-
-    const overnightReturn = +(((open - prevClose) / prevClose) * 100).toFixed(2);
-    const intradayReturn = +(((close - open) / open) * 100).toFixed(2);
-    const totalReturn = +(((close - prevClose) / prevClose) * 100).toFixed(2);
+    const overnightReturn = prevClose > 0 ? +(((open - prevClose) / prevClose) * 100).toFixed(2) : 0.0;
+    const intradayReturn = open > 0 ? +(((close - open) / open) * 100).toFixed(2) : 0.0;
+    const totalReturn = prevClose > 0 ? +(((close - prevClose) / prevClose) * 100).toFixed(2) : 0.0;
 
     rows.push({
-      date: dateStr,
+      date: cur.time,
       open,
       high,
       low,
@@ -1979,9 +1910,6 @@ export function getHistoricalPrices(ticker: string, count: number = 30): import(
       total_return: totalReturn,
       vwap,
     });
-
-    curClose = prevClose;
-    cursorDate.setDate(cursorDate.getDate() - 1);
   }
 
   return rows;

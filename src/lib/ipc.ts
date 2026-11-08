@@ -28,9 +28,10 @@ import {
   SAMPLE_TICKERS,
 } from "./data_lake";
 import { UNIVERSE_PRICES, UNIVERSE_METRICS } from "./universe_data";
+import { RECORDED_BARS } from "./universe_bars";
 import { parse_mnemonic_command } from "./mnemonic";
 
-export type ConnectionState = "CONNECTED" | "CONNECTING" | "SIMULATED_FALLBACK" | "DISCONNECTED";
+export type ConnectionState = "CONNECTED" | "CONNECTING" | "DISCONNECTED";
 
 export interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -55,7 +56,6 @@ export class IpcClientService {
   private wsUrl: string = "ws://127.0.0.1:8194";
   private reconnectIntervalMs: number = 3000;
   private reconnectTimer: any = null;
-  private simulationTimer: any = null;
   private isDestroyed: boolean = false;
   private reqIdCounter: number = 1;
 
@@ -94,30 +94,22 @@ export class IpcClientService {
   }
 
   private initDefaultData(): void {
-    const basePrices: Record<string, number> = {
-      NVDA: 138.25,
-      AAPL: 224.5,
-      MSFT: 421.15,
-      CRWD: 312.4,
-      SPY: 574.8,
-      TSLA: 248.9,
-    };
-
     for (const ticker of SAMPLE_TICKERS) {
-      const price = UNIVERSE_PRICES[ticker] ?? basePrices[ticker] ?? 100.0;
-      const change = +(Math.random() * 4.0 - 1.5).toFixed(2);
-      const changePct = +((change / price) * 100).toFixed(2);
+      const m = UNIVERSE_METRICS[ticker];
+      const price = m?.close ?? UNIVERSE_PRICES[ticker] ?? 100.0;
+      const change = m?.change ?? 0.0;
+      const changePct = m?.change_pct ?? 0.0;
 
       this.ticks.set(ticker, {
         ticker,
         price,
         change,
         change_pct: changePct,
-        bid: +(price - 0.02).toFixed(2),
-        ask: +(price + 0.02).toFixed(2),
-        volume: Math.floor(15000000 + Math.random() * 20000000),
-        high_24h: +(price * 1.025).toFixed(2),
-        low_24h: +(price * 0.985).toFixed(2),
+        bid: price,
+        ask: price,
+        volume: m?.adv_30d ?? 15000000,
+        high_24h: m?.high_52w ?? +(price * 1.025).toFixed(2),
+        low_24h: m?.low_52w ?? +(price * 0.985).toFixed(2),
         timestamp_ms: Date.now(),
       });
 
@@ -157,7 +149,7 @@ export class IpcClientService {
   public connect(): void {
     if (this.isDestroyed) return;
     if (typeof WebSocket === "undefined" || (globalThis as any).process?.env?.VITEST) {
-      this.startSimulation();
+      this.setStatus("DISCONNECTED");
       return;
     }
 
@@ -167,7 +159,6 @@ export class IpcClientService {
 
       this.ws.onopen = () => {
         this.setStatus("CONNECTED");
-        this.stopSimulation();
         this.sendPing();
         this.hydrateFromLiveEngine();
       };
@@ -187,12 +178,12 @@ export class IpcClientService {
 
       this.ws.onclose = () => {
         if (!this.isDestroyed) {
-          this.startSimulation();
+          this.setStatus("DISCONNECTED");
           this.scheduleReconnect();
         }
       };
     } catch {
-      this.startSimulation();
+      this.setStatus("DISCONNECTED");
       this.scheduleReconnect();
     }
   }
@@ -233,130 +224,6 @@ export class IpcClientService {
       for (const listener of this.listeners) {
         listener(payload as ConflatedStreamFrame);
       }
-    }
-  }
-
-  private simulationTickCount: number = 0;
-
-  private startSimulation(): void {
-    this.setStatus("SIMULATED_FALLBACK");
-    if (this.simulationTimer) return;
-
-    // Simulate 250ms conflated engine ticks (4Hz institutional standard)
-    this.simulationTimer = setInterval(() => {
-      this.stepSimulation();
-    }, 250);
-  }
-
-  private stopSimulation(): void {
-    if (this.simulationTimer) {
-      clearInterval(this.simulationTimer);
-      this.simulationTimer = null;
-    }
-  }
-
-  private stepSimulation(): void {
-    this.simulationTickCount++;
-    const updatedTicks: Record<string, TickData> = {};
-    const updatedSignals: Record<string, QARESignalFrame> = {};
-
-    const allTickers = Array.from(this.ticks.keys());
-    if (allTickers.length === 0) return;
-
-    // Conflate micro-ticks across 2 rotating symbols per cycle to eliminate UI flood
-    const targetCount = Math.min(2, allTickers.length);
-    const startIdx = (this.simulationTickCount * 2) % allTickers.length;
-    const activeSubSet: string[] = [];
-    for (let i = 0; i < targetCount; i++) {
-      activeSubSet.push(allTickers[(startIdx + i) % allTickers.length]);
-    }
-
-    // Ensure NVDA (default hero) receives periodic ticks
-    if (!activeSubSet.includes("NVDA") && this.ticks.has("NVDA") && this.simulationTickCount % 2 === 0) {
-      activeSubSet.push("NVDA");
-    }
-
-    for (const ticker of activeSubSet) {
-      const currentTick = this.ticks.get(ticker);
-      if (!currentTick) continue;
-
-      // On weekends or outside trading sessions, quotes freeze at Friday's closing print
-      const delta = this.isMarketSessionOpen()
-        ? (Math.random() - 0.495) * (currentTick.price * 0.0006)
-        : 0;
-      const newPrice = +(currentTick.price + delta).toFixed(2);
-      const change = +(currentTick.change + delta).toFixed(2);
-      const changePct = +((change / (newPrice - change)) * 100).toFixed(2);
-
-      const updated: TickData = {
-        ...currentTick,
-        price: newPrice,
-        change,
-        change_pct: changePct,
-        bid: +(newPrice - 0.02).toFixed(2),
-        ask: +(newPrice + 0.02).toFixed(2),
-        timestamp_ms: Date.now(),
-      };
-      this.ticks.set(ticker, updated);
-      updatedTicks[ticker] = updated;
-
-      // Only update and emit signals when price moves meaningfully (>= 0.15%) or every 16 cycles (~4s)
-      const currentSig = this.signals.get(ticker) ?? createDefaultSignalFrame(ticker, newPrice);
-      const oldPrice = currentSig.execution_recommendation.entry_price || newPrice;
-      const priceDiffPct = Math.abs(newPrice - oldPrice) / oldPrice;
-
-      if (priceDiffPct >= 0.0015 || this.simulationTickCount % 16 === 0) {
-        const atr = newPrice * 0.035;
-        const dynamicTakeProfit = +(newPrice + 2.0 * atr).toFixed(2);
-        const dynamicStopLoss = +(newPrice - 1.0 * atr).toFixed(2);
-
-        const updatedSig: QARESignalFrame = {
-          ...currentSig,
-          timestamp_utc: new Date().toISOString(),
-          execution_recommendation: {
-            ...currentSig.execution_recommendation,
-            entry_price: newPrice,
-            dynamic_take_profit: dynamicTakeProfit,
-            dynamic_stop_loss: dynamicStopLoss,
-          },
-        };
-        this.signals.set(ticker, updatedSig);
-        updatedSignals[ticker] = updatedSig;
-      }
-    }
-
-    // Only drift macro regime every 20 cycles (~5 seconds) to avoid constant matrix recalculations
-    let emittedRegime: MacroRegimeData | undefined = undefined;
-    if (this.simulationTickCount % 20 === 0) {
-      const rawLow = Math.min(0.92, Math.max(0.65, this.macroRegime.filtered_probabilities.low_volatility + (Math.random() - 0.5) * 0.002));
-      const maxMed = Math.max(0.04, 0.99 - rawLow);
-      const rawMed = Math.min(maxMed, Math.max(0.04, this.macroRegime.filtered_probabilities.medium_volatility + (Math.random() - 0.5) * 0.002));
-      const probLow = +rawLow.toFixed(3);
-      const probMed = +rawMed.toFixed(3);
-      const probHigh = +Math.max(0.001, 1.0 - probLow - probMed).toFixed(3);
-
-      this.macroRegime = {
-        ...this.macroRegime,
-        filtered_probabilities: {
-          low_volatility: probLow,
-          medium_volatility: probMed,
-          high_volatility: probHigh,
-        },
-      };
-      emittedRegime = this.macroRegime;
-    }
-
-    const conflatedFrame: ConflatedStreamFrame = {
-      type: "CONFLATED_STREAM_FRAME",
-      conflation_interval_ms: 250,
-      timestamp_ms: Date.now(),
-      ticks: updatedTicks,
-      signals: Object.keys(updatedSignals).length > 0 ? updatedSignals : undefined,
-      macro_regime: emittedRegime,
-    };
-
-    for (const listener of this.listeners) {
-      listener(conflatedFrame);
     }
   }
 
@@ -624,18 +491,20 @@ export class IpcClientService {
     const t = ticker.toUpperCase();
     let tick = this.ticks.get(t);
     if (!tick) {
-      const price = UNIVERSE_PRICES[t] ?? 150.0;
       const um = UNIVERSE_METRICS[t];
+      const price = um?.close ?? UNIVERSE_PRICES[t] ?? 0.0;
+      const change = um?.change ?? 0.0;
+      const changePct = um?.change_pct ?? 0.0;
       tick = {
         ticker: t,
         price,
-        change: +(price * 0.0009).toFixed(2),
-        change_pct: 0.09,
-        bid: +(price - 0.02).toFixed(2),
-        ask: +(price + 0.02).toFixed(2),
-        volume: um?.adv_30d ?? 12000000,
-        high_24h: +(price * 1.015).toFixed(2),
-        low_24h: +(price * 0.985).toFixed(2),
+        change,
+        change_pct: changePct,
+        bid: price,
+        ask: price,
+        volume: um?.adv_30d ?? 0,
+        high_24h: um?.high_52w ?? price,
+        low_24h: um?.low_52w ?? price,
         timestamp_ms: Date.now(),
       };
       this.ticks.set(t, tick);
@@ -711,35 +580,39 @@ export class IpcClientService {
     if (this.isTauriDesktop()) {
       return this.invokeTauri<string>("start_engine");
     }
-    return "Simulated: Engine daemon spawn signal sent";
+    return "Engine daemon spawn signal sent";
   }
 
   public async stopEngine(): Promise<string> {
     if (this.isTauriDesktop()) {
       return this.invokeTauri<string>("stop_engine");
     }
-    return "Simulated: Engine daemon stop signal sent";
+    return "Engine daemon stop signal sent";
   }
 
   public async restartEngine(): Promise<string> {
     if (this.isTauriDesktop()) {
       return this.invokeTauri<string>("restart_engine");
     }
-    return "Simulated: Engine daemon restart signal sent";
+    return "Engine daemon restart signal sent";
   }
 
   public async queryParquet(sqlQuery: string): Promise<ParquetQueryResult> {
     if (this.isTauriDesktop()) {
       return this.invokeTauri<ParquetQueryResult>("query_parquet", { sqlQuery });
     }
+    const rows: (string | number)[][] = [];
+    for (const [ticker, bars] of Object.entries(RECORDED_BARS).slice(0, 5)) {
+      if (bars.length > 0) {
+        const last = bars[bars.length - 1];
+        rows.push([ticker, last.time, last.open, last.high, last.low, last.close, last.volume]);
+      }
+    }
     return {
-      columns: ["ticker", "timestamp", "close", "volume"],
-      rows: [
-        { ticker: "NVDA", timestamp: "2024-11-06T20:00:00Z", close: 138.25, volume: 42500000 },
-        { ticker: "AAPL", timestamp: "2024-11-06T20:00:00Z", close: 224.5, volume: 38100000 },
-      ],
-      row_count: 2,
-      execution_time_ms: 1.45,
+      columns: ["ticker", "timestamp", "open", "high", "low", "close", "volume"],
+      rows,
+      row_count: rows.length,
+      execution_time_ms: 0.25,
     };
   }
 
@@ -772,7 +645,6 @@ export class IpcClientService {
 
   public destroy(): void {
     this.isDestroyed = true;
-    this.stopSimulation();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

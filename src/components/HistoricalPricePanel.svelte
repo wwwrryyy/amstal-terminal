@@ -82,7 +82,14 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-[#172033]/40">
-        {#each priceRows as row}
+        {#if priceRows.length === 0}
+          <tr>
+            <td colspan="10" class="p-8 text-center text-[#5E6D82]">
+              NO RECORDED SESSIONS AVAILABLE FOR {ticker} &bull; MARKET CLOSED
+            </td>
+          </tr>
+        {:else}
+          {#each priceRows as row}
           <tr class="hover:bg-[#0C111B] transition-colors">
             <td class="p-2 text-[#E6EDF5]">{row.date}</td>
             <td class="p-2 text-right text-[#E6EDF5]">${row.open.toFixed(2)}</td>
@@ -104,6 +111,7 @@
             </td>
           </tr>
         {/each}
+        {/if}
       </tbody>
     </table>
   </div>

@@ -79,7 +79,7 @@
   let resizeObserver: ResizeObserver | null = null;
   let unsubscribeIpc: (() => void) | null = null;
   let unsubscribeStatus: (() => void) | null = null;
-  let bars: OHLCVBar[] = [];
+  let bars = $state<OHLCVBar[]>([]);
 
   function initChart() {
     if (!chartContainer) return;
@@ -220,7 +220,14 @@
   function loadData() {
     if (!candleSeries || !volumeSeries || !chart) return;
 
-    bars = generateHistoricalCandles(ticker, timeframe === "1D" ? 90 : 120);
+    bars = generateHistoricalCandles(ticker, timeframe === "1D" ? 60 : 90);
+
+    if (bars.length === 0) {
+      candleSeries.setData([]);
+      volumeSeries.setData([]);
+      clearBarriers();
+      return;
+    }
 
     const candleData = bars.map((b) => ({
       time: b.time as Time,
@@ -579,7 +586,7 @@
       </div>
     {:else}
       <div class="text-[#5E6D82] text-3xs whitespace-nowrap hidden sm:block">
-        {connState === "CONNECTED" ? "100ms CONFLATION" : "250ms CONFLATION"} &bull; TRIPLE BARRIER METHOD
+        {connState === "CONNECTED" ? "LIVE FEED" : "RECORDED LAKEHOUSE"} &bull; TRIPLE BARRIER METHOD
       </div>
     {/if}
   </div>
@@ -587,6 +594,12 @@
   <!-- Lightweight Charts canvas container -->
   <div class="flex-1 relative w-full h-full min-h-[180px] bg-[#06090F]">
     <div bind:this={chartContainer} class="absolute inset-0 w-full h-full"></div>
+    {#if bars.length === 0}
+      <div class="absolute inset-0 flex flex-col items-center justify-center bg-[#06090F]/90 text-[#8B98A5] font-mono z-10 pointer-events-none">
+        <span class="text-sm font-semibold text-[#FFB000]">NO RECORDED BARS FOR {ticker}</span>
+        <span class="text-2xs text-[#5E6D82] mt-1">Market is CLOSED. Waiting for live trading session.</span>
+      </div>
+    {/if}
   </div>
 </div>
 
