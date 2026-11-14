@@ -65,7 +65,7 @@ fn count_files_and_size(dir: &Path) -> (usize, u64) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_file() && p.extension().map_or(false, |ext| ext == "parquet") {
+            if p.is_file() && p.extension().is_some_and(|ext| ext == "parquet") {
                 count += 1;
                 if let Ok(meta) = p.metadata() {
                     size += meta.len();
@@ -95,7 +95,7 @@ fn masked_ends_with_relation_kw(masked_upper: &str) -> bool {
                 || prefix
                     .chars()
                     .last()
-                    .map_or(true, |c| !c.is_ascii_alphanumeric() && c != '_')
+                    .is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_')
             {
                 return true;
             }
@@ -385,8 +385,7 @@ pub fn query_parquet(sql_query: String) -> Result<QueryResult, String> {
 
     while let Some(row) = rows.next().map_err(|e| format!("DuckDB Row Fetch Error: {}", e))? {
         let mut row_map: HashMap<String, serde_json::Value> = HashMap::with_capacity(col_count);
-        for idx in 0..col_count {
-            let col_name = &columns[idx];
+        for (idx, col_name) in columns.iter().enumerate() {
             let val = row.get_ref(idx).map_err(|e| format!("Cell Fetch Error: {}", e))?;
             row_map.insert(col_name.clone(), convert_duckdb_value_to_json(val));
         }
