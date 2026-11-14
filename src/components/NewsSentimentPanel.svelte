@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { ipcService } from "../lib/ipc";
   import type { ColorChannel, NewsItemData } from "../lib/types";
 
@@ -18,7 +19,48 @@
     onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
 
-  let newsItems = $derived<NewsItemData[]>(ipcService.getNewsFeed(ticker));
+  let newsItems = $state<NewsItemData[]>(ipcService.getNewsFeed("NVDA"));
+  let connState = $state<string>(ipcService.connectionState);
+  let isLoading = $state<boolean>(false);
+  let unsubscribeStatus: (() => void) | null = null;
+  let unsubscribeIpc: (() => void) | null = null;
+
+  $effect(() => {
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      const cached = ipcService.getNewsFeed(sym);
+      newsItems = cached;
+      if (connected) {
+        if (cached.length === 0) isLoading = true;
+        ipcService
+          .fetchNewsFeed(sym)
+          .then((fresh) => {
+            if (Array.isArray(fresh) && sym === ticker) newsItems = fresh;
+          })
+          .finally(() => {
+            if (sym === ticker) isLoading = false;
+          });
+      } else {
+        isLoading = false;
+      }
+    }
+  });
+
+  onMount(() => {
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
+    unsubscribeIpc = ipcService.subscribe(() => {
+      const latest = ipcService.getNewsFeed(ticker);
+      if (latest !== newsItems) newsItems = latest;
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubscribeStatus) unsubscribeStatus();
+    if (unsubscribeIpc) unsubscribeIpc();
+  });
 
   const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
     BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
@@ -79,8 +121,24 @@
 
   <!-- News Stream Container -->
   <div class="flex-1 overflow-y-auto p-2 space-y-2 bg-[#06090F]">
-    {#each newsItems as item}
-      <div class="p-2.5 bg-[#0C111B] border border-[#172033] rounded flex flex-col gap-1.5 hover:border-[#172033]*2 transition-colors">
+    {#if newsItems.length === 0}
+      <div class="h-full flex flex-col items-center justify-center p-6 text-center font-mono">
+        <span class="text-xs font-bold {isLoading ? 'text-[#00D2FF]' : 'text-[#FFB000]'}">
+          {isLoading
+            ? `FETCHING LIVE NEWS & FINBERT SENTIMENT FOR ${ticker}…`
+            : connState === "CONNECTED"
+              ? `NO LIVE NEWS ITEMS RETURNED FOR ${ticker}`
+              : "ENGINE DAEMON OFFLINE — NO SIMULATED NEWS FEED"}
+        </span>
+        <span class="text-2xs text-[#5E6D82] mt-1 max-w-md">
+          {connState === "CONNECTED"
+            ? "Yahoo Finance news feed returned no recent articles for this ticker."
+            : "Connect live QARE-MM Python daemon on ws://127.0.0.1:8194 to view real news headlines & decayed sentiment."}
+        </span>
+      </div>
+    {:else}
+      {#each newsItems as item}
+      <div class="p-2.5 bg-[#0C111B] border border-[#172033] rounded flex flex-col gap-1.5 hover:border-[#2A3B5C] transition-colors">
         <div class="flex items-center justify-between text-2xs font-mono">
           <div class="flex items-center gap-2">
             <span class="px-1.5 py-0.2 rounded bg-[#121824] border border-[#172033] text-[#00D2FF] font-semibold">{item.source}</span>
@@ -112,14 +170,15 @@
           <span>WEIGHT RETENTION:</span>
           <div class="flex-1 bg-[#121824] h-1 rounded-full overflow-hidden">
             <div
-              style="width: {Math.max(5, (Math.abs(item.decayed_sentiment) / (Math.abs(item.finbert_score) + 1e-6)) * 100)}%"
+              style="width: {Math.max(5, Math.min(100, (Math.abs(item.decayed_sentiment) / (Math.abs(item.finbert_score) + 1e-6)) * 100))}%"
               class="h-full bg-[#FFB000]"
             ></div>
           </div>
           <span>{( (Math.abs(item.decayed_sentiment) / (Math.abs(item.finbert_score) + 1e-6)) * 100 ).toFixed(0)}%</span>
         </div>
       </div>
-    {/each}
+      {/each}
+    {/if}
   </div>
 </div>
 

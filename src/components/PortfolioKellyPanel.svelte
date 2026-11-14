@@ -34,99 +34,139 @@
     onChannelChange(channels[nextIdx]);
   }
 
-  let signal = $state<QARESignalFrame>(ipcService.getSignal("NVDA"));
+  let signal = $state<QARESignalFrame | null>(ipcService.getSignal("NVDA"));
+  let connState = $state<string>(ipcService.connectionState);
   let kellyMultiplier = $state<number>(0.5); // Half-Kelly default (institutional standard)
+  let isLoading = $state<boolean>(false);
   let unsubscribeIpc: (() => void) | null = null;
+  let unsubscribeStatus: (() => void) | null = null;
 
   $effect(() => {
-    if (ticker) {
-      signal = ipcService.getSignal(ticker);
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      const cached = ipcService.getSignal(sym);
+      signal = cached;
+      if (connected) {
+        if (!cached) isLoading = true;
+        Promise.all([ipcService.fetchSignal(sym), ipcService.fetchPortfolio()])
+          .then(([freshSig]) => {
+            if (freshSig && sym === ticker) signal = freshSig;
+          })
+          .finally(() => {
+            if (sym === ticker) isLoading = false;
+          });
+      } else {
+        isLoading = false;
+      }
     }
   });
 
   onMount(() => {
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
+
     unsubscribeIpc = ipcService.subscribe((frame) => {
       const sym = ticker.toUpperCase();
       if (frame.signals && frame.signals[sym]) {
-        const newSig = frame.signals[sym];
-        const oldEntry = signal.execution_recommendation.entry_price;
-        const newEntry = newSig.execution_recommendation.entry_price;
-        if (
-          Math.abs(newEntry - oldEntry) >= 0.01 ||
-          newSig.execution_recommendation.action !== signal.execution_recommendation.action ||
-          newSig.winning_engine !== signal.winning_engine
-        ) {
-          signal = newSig;
-        }
+        signal = frame.signals[sym];
+      } else {
+        const cached = ipcService.getSignal(sym);
+        if (cached) signal = cached;
       }
     });
   });
 
   onDestroy(() => {
     if (unsubscribeIpc) unsubscribeIpc();
+    if (unsubscribeStatus) unsubscribeStatus();
   });
 
-  // Derived Kelly calculations
-  let unconstrainedKelly = $derived(signal.execution_recommendation.unconstrained_kelly_pct || 0);
-  let l1NormBase = $derived(signal.execution_recommendation.l1_normalized_portfolio_allocation_pct || 0);
+  // Derived Kelly calculations strictly from live QARE-MM signal
+  let unconstrainedKelly = $derived(signal?.execution_recommendation?.unconstrained_kelly_pct ?? 0);
+  let l1NormBase = $derived(signal?.execution_recommendation?.l1_normalized_portfolio_allocation_pct ?? 0);
   // Synchronized with HMM dynamic multiplier formula: 0.85 * (1 - 0.80 * P(S_2)) * (1 - 0.20 * P(S_1))
   let kappa = $derived.by(() => {
-    const fp = signal.macro_regime?.filtered_probabilities;
-    if (fp) {
-      return +(0.85 * (1 - 0.80 * (fp.high_volatility ?? 0.043)) * (1 - 0.20 * (fp.medium_volatility ?? 0.145))).toFixed(2);
+    if (!signal) return null;
+    if (typeof signal.macro_regime?.kappa === "number" && Number.isFinite(signal.macro_regime.kappa)) {
+      return +signal.macro_regime.kappa.toFixed(2);
     }
-    return signal.macro_regime?.kappa ?? 0.80;
+    const fp = signal.macro_regime?.filtered_probabilities;
+    if (fp && typeof fp.high_volatility === "number" && typeof fp.medium_volatility === "number") {
+      return +(0.85 * (1 - 0.80 * fp.high_volatility) * (1 - 0.20 * fp.medium_volatility)).toFixed(2);
+    }
+    return null;
   });
-  let isBuyAction = $derived(signal.execution_recommendation.action === "BUY");
+  let isBuyAction = $derived(signal?.execution_recommendation?.action === "BUY");
 
-  // Scaled portfolio weight: base * (kellyMultiplier / 0.5) * kappa (strictly 0.00% if HOLD/SELL in LONG_ONLY)
-  let finalAllocPct = $derived(
-    isBuyAction ? +(l1NormBase * (kellyMultiplier / 0.5) * (kappa / 0.80)).toFixed(2) : 0.0
-  );
+  // Concave institutional Kelly weight capped cleanly at 25% max single-name exposure (0% if non-BUY in LONG_ONLY)
+  let finalAllocPct = $derived.by(() => {
+    if (!signal || !isBuyAction) return 0.0;
+    const effKappa = kappa ?? 0.85;
+    const scale = (kellyMultiplier / 0.5) * (effKappa / 0.85);
+    const rawScaled = l1NormBase * scale;
+    return +Math.min(25.0, Math.max(0.0, rawScaled)).toFixed(2);
+  });
 
   // Clear execution rationale explaining why action is BUY, SELL, or HOLD
   let executionRationale = $derived.by(() => {
+    if (!signal) return "";
+    if (signal.execution_mode?.includes("UNREADY") || signal.winning_engine === "NONE") {
+      return "UNREADY: Model checkpoint or calibrated features missing (neutral HOLD enforced).";
+    }
     const act = signal.execution_recommendation.action;
     const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
     const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
-    const frictionBps = signal.execution_recommendation.estimated_round_trip_cost_bps || 15;
+    const frictionBps = signal.execution_recommendation.estimated_round_trip_cost_bps ?? 15;
 
     if (act === "HOLD") {
-      return `HOLD RATIONALE: Edge (+${((pBuy - 0.45) * 100).toFixed(2)}%) below ${frictionBps} bps friction hurdle (Zero-skill prior guard active)`;
+      return `HOLD RATIONALE: Edge (+${((pBuy - 0.45) * 100).toFixed(2)}%) below ${frictionBps} bps friction hurdle`;
     } else if (act === "BUY") {
-      return `ALLOCATE RATIONALE: Bull posterior ${(pBuy * 100).toFixed(1)}% exceeds hurdle; Kelly sized with κ=${kappa.toFixed(2)} haircut`;
+      return `ALLOCATE RATIONALE: Bull posterior ${(pBuy * 100).toFixed(1)}% exceeds hurdle; Kelly sized with κ=${(kappa ?? 0).toFixed(2)} haircut`;
     } else {
-      return `EXIT RATIONALE: Downside posterior ${(pSell * 100).toFixed(1)}% > 35.0% threshold (Capital preservation hedge)`;
+      return `EXIT RATIONALE: Downside posterior ${(pSell * 100).toFixed(1)}% > 35.0% threshold`;
     }
   });
 
-  // Expected growth rate g(f) decomposed: Portfolio Growth vs Committed Risk Sleeve Return
-  // g_port(f) = (termBuy + termSell - friction) * (252 / horizon)
-  let horizonDays = $derived(signal.horizon_days || 10);
+  // Expected growth rate g(f) decomposed strictly from positive backend barriers
+  let horizonDays = $derived(signal?.horizon_days || 10);
   let tradesPerYear = $derived(252 / horizonDays);
 
-  let expectedPortfolioGrowth = $derived.by(() => {
-    if (!isBuyAction || finalAllocPct <= 0) return "0.00";
-    const sleeveVal = parseFloat(expectedSleeveGrowth);
-    const portGrowth = (finalAllocPct / 100) * sleeveVal;
-    return Math.max(0, portGrowth).toFixed(2);
-  });
-
-  let expectedSleeveGrowth = $derived.by(() => {
+  let expectedSleeveGrowth = $derived.by<string | null>(() => {
+    if (!signal) return null;
+    const rec = signal.execution_recommendation;
+    const entry = rec.entry_price;
+    const tp = rec.dynamic_take_profit;
+    const sl = rec.dynamic_stop_loss;
+    if (!(entry > 0) || !(tp > entry) || !(sl > 0 && sl < entry)) {
+      return null;
+    }
     const pBuy = signal.calibration.calibrated_probabilities.outperform_buy;
     const pSell = signal.calibration.calibrated_probabilities.underperform_sell;
-    const entry = signal.execution_recommendation.entry_price || 100;
-    const tp = signal.execution_recommendation.dynamic_take_profit || entry * 1.07;
-    const sl = signal.execution_recommendation.dynamic_stop_loss || entry * 0.965;
-    const rWin = Math.max(0.01, (tp - entry) / entry);
-    const rLoss = Math.max(0.005, (entry - sl) / entry);
-    const friction = (signal.execution_recommendation.estimated_round_trip_cost_bps || 15) / 10000;
+    const rWin = Math.max(0.001, (tp - entry) / entry);
+    const rLoss = Math.min(0.99, Math.max(0.001, (entry - sl) / entry));
+    const friction = (rec.estimated_round_trip_cost_bps ?? 15) / 10000;
 
     const sleeveBuy = pBuy * Math.log(1 + rWin);
     const sleeveSell = pSell * Math.log(1 - rLoss);
     const g = (sleeveBuy + sleeveSell - friction) * tradesPerYear * 100;
     return Math.max(0, g).toFixed(1);
   });
+
+  let missingModalities = $derived(signal?.data_integrity?.missing_modalities ?? []);
+
+  let expectedPortfolioGrowth = $derived.by<string | null>(() => {
+    if (signal?.execution_mode?.includes("UNREADY") || signal?.winning_engine === "NONE") {
+      return null;
+    }
+    if (!isBuyAction || finalAllocPct <= 0 || expectedSleeveGrowth === null) return "0.00";
+    const sleeveVal = parseFloat(expectedSleeveGrowth);
+    const portGrowth = (finalAllocPct / 100) * sleeveVal;
+    return Math.max(0, portGrowth).toFixed(2);
+  });
+
+  let factorEntries = $derived(signal?.signal_breakdown ? Object.entries(signal.signal_breakdown) : []);
 
   // Factor breakdown formatted definitions: all centered on 0 (-1 to 1) for strict diverging symmetry
   const factorLabels: Record<string, { label: string; group: string; min: number; max: number }> = {
@@ -199,6 +239,21 @@
 
   <!-- Main Split Layout: Top Kelly Sizer Card, Bottom Factor Breakdown -->
   <div class="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden p-2 gap-2 text-xs">
+    {#if isLoading && !signal}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center font-mono">
+        <span class="text-xs font-bold text-[#00D2FF]">COMPUTING LIVE QARE-MM SIGNAL &amp; KELLY SIZING FOR {ticker}…</span>
+        <span class="text-2xs text-[#5E6D82] mt-1">Evaluating factor residuals, HMM kappa haircut, and calibrated posteriors.</span>
+      </div>
+    {:else if !signal}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center font-mono">
+        <span class="text-xs font-bold text-[#FFB000]">
+          {connState === "CONNECTED" ? `SIGNAL UNAVAILABLE FOR ${ticker}` : "ENGINE DAEMON OFFLINE — NO SIMULATED SIGNAL"}
+        </span>
+        <span class="text-2xs text-[#5E6D82] mt-1 max-w-md">
+          Connect live QARE-MM Python daemon on ws://127.0.0.1:8194 to run fractional Kelly portfolio optimization and factor scoring.
+        </span>
+      </div>
+    {:else}
     <!-- Kelly Execution Summary Tile with Rationale Bar -->
     <div class="flex flex-col p-2 bg-[#06090F] border border-[#172033] rounded gap-1.5 shrink-0">
       <div class="grid grid-cols-4 gap-2">
@@ -257,11 +312,13 @@
         <div class="flex flex-col justify-between">
           <span class="text-2xs text-[#5E6D82]">EXPECTED GROWTH g(f)</span>
           <div class="flex items-baseline gap-1 mt-1 font-mono">
-            <span class="text-sm font-bold text-[#00FF66]">+{expectedPortfolioGrowth}%</span>
+            <span class="text-sm font-bold {expectedPortfolioGrowth !== null ? 'text-[#00FF66]' : 'text-[#8B98A5]'}">
+              {expectedPortfolioGrowth !== null ? `+${expectedPortfolioGrowth}%` : "N/A"}
+            </span>
             <span class="text-2xs text-[#5E6D82]">port. ann.</span>
           </div>
-          <div class="text-3xs text-[#5E6D82] font-mono truncate" title="Per-sleeve standalone capital drift: +{expectedSleeveGrowth}% ann.">
-            Sleeve: <strong class="text-[#00D2FF]">+{expectedSleeveGrowth}%</strong> | Fric: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong>
+          <div class="text-3xs text-[#5E6D82] font-mono truncate">
+            Sleeve: <strong class="text-[#00D2FF]">{expectedSleeveGrowth !== null ? `+${expectedSleeveGrowth}%` : "N/A"}</strong> | Fric: <strong class="text-[#E6EDF5]">{signal.execution_recommendation.estimated_round_trip_cost_bps} bps</strong>
           </div>
         </div>
       </div>
@@ -276,6 +333,17 @@
           EXECUTION: {signal.execution_mode}
         </div>
       </div>
+
+      {#if missingModalities.length > 0}
+        <div class="pt-1 border-t border-[#172033]/70 flex items-center flex-wrap gap-1.5 text-3xs font-mono">
+          <span class="text-[#FFB000] font-bold">MISSING MODALITIES:</span>
+          {#each missingModalities as mod}
+            <span class="px-1.5 py-0.2 rounded bg-[#FFB000]/10 border border-[#FFB000]/30 text-[#FFB000]">
+              {mod}
+            </span>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <!-- Factor Ranks Breakdown Table (Fully unclipped with min-h-0 and smooth scrolling) -->
@@ -288,43 +356,49 @@
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto divide-y divide-[#172033]/60 pb-2 custom-scrollbar">
-        {#each Object.entries(signal.signal_breakdown) as [key, val]}
-          {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
-          <div class="flex items-center justify-between px-3 py-[3px] text-2xs hover:bg-[#0C111B] transition-colors">
-            <span class="w-1/3 font-semibold text-[#E6EDF5] truncate" title={meta.label}>
-              {meta.label}
-            </span>
-            <span class="w-1/4 text-[#5E6D82] truncate">
-              {meta.group}
-            </span>
-            <span class="w-1/6 text-right font-mono {val >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
-              {val >= 0 ? "+" : ""}{val.toFixed(2)}
-            </span>
+        {#if factorEntries.length === 0}
+          <div class="p-4 text-center text-2xs text-[#5E6D82] font-mono">
+            No factor breakdown features emitted (model unready or insufficient history).
+          </div>
+        {:else}
+          {#each factorEntries as [key, val]}
+            {@const meta = factorLabels[key] || { label: key, group: "General", min: -1, max: 1 }}
+            <div class="flex items-center justify-between px-3 py-[3px] text-2xs hover:bg-[#0C111B] transition-colors">
+              <span class="w-1/3 font-semibold text-[#E6EDF5] truncate" title={meta.label}>
+                {meta.label}
+              </span>
+              <span class="w-1/4 text-[#5E6D82] truncate">
+                {meta.group}
+              </span>
+              <span class="w-1/6 text-right font-mono {val >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+                {val >= 0 ? "+" : ""}{val.toFixed(2)}
+              </span>
 
-            <!-- Zero-centered diverging rank meter (Uniform center anchor) -->
-            <div class="w-1/4 pl-4 flex items-center">
-              <div class="w-full h-2 bg-[#121824] rounded flex relative">
-                <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#5E6D82]/50"></div>
-                {#if val >= 0}
-                  <div
-                    style="left: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
-                    class="absolute top-0 bottom-0 {key.includes('smart_money') ? 'bg-[#00D2FF]' : 'bg-[#00FF66]'} rounded-r"
-                  ></div>
-                {:else}
-                  <div
-                    style="right: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
-                    class="absolute top-0 bottom-0 bg-[#FF3344] rounded-l"
-                  ></div>
-                {/if}
+              <div class="w-1/4 pl-4 flex items-center">
+                <div class="w-full h-2 bg-[#121824] rounded flex relative">
+                  <div class="absolute left-1/2 top-0 bottom-0 w-px bg-[#5E6D82]/50"></div>
+                  {#if val >= 0}
+                    <div
+                      style="left: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
+                      class="absolute top-0 bottom-0 {key.includes('smart_money') ? 'bg-[#00D2FF]' : 'bg-[#00FF66]'} rounded-r"
+                    ></div>
+                  {:else}
+                    <div
+                      style="right: 50%; width: {Math.min(50, Math.abs(val) * 50)}%"
+                      class="absolute top-0 bottom-0 bg-[#FF3344] rounded-l"
+                    ></div>
+                  {/if}
+                </div>
               </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {/if}
       </div>
 
       <!-- Polished bottom fade gradient -->
       <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#06090F] to-transparent"></div>
     </div>
+    {/if}
   </div>
 </div>
 

@@ -23,6 +23,7 @@
 
   let inputQuery = $state("");
   let isThinking = $state(false);
+  let connState = $state<string>(ipcService.connectionState);
   let chatContainer: HTMLDivElement | null = $state(null);
 
   let messages = $state<CopilotMessage[]>([
@@ -30,9 +31,9 @@
       id: "msg-welcome",
       sender: "SYSTEM",
       timestamp_iso: new Date().toISOString(),
-      text: "Amstal AI Copilot online. Powered by quantitative heuristic router and IPC semantic index. Ask questions regarding factor ranking, fractional Kelly sizing, forward-filtered HMM regimes, EDGAR redlines, or analyst consensus targets.",
-      sources: ["Amstal Engine", "Local IPC JSON-RPC 2.0"],
-      suggested_commands: ["NVDA PORT <GO>", "HMM <GO>", "NVDA ANR <GO>"],
+      text: "Amstal AI Copilot ready. Queries dispatch directly over JSON-RPC 2.0 to the QARE-MM Python daemon using live factor signals, HMM regime state, SEC EDGAR filings, and analyst consensus.",
+      sources: ["Amstal Engine", "JSON-RPC 2.0"],
+      suggested_commands: ["NVDA PORT <GO>", "HMM <GO>", "NVDA FA <GO>", "NVDA ANR <GO>"],
     },
   ]);
 
@@ -101,7 +102,7 @@
           id: `err-${Date.now()}`,
           sender: "SYSTEM",
           timestamp_iso: new Date().toISOString(),
-          text: "Error connecting to local engine IPC router. Defaulting to cached workstation heuristics.",
+          text: "Error connecting to QARE-MM engine daemon IPC router. Ensure the Python daemon is running on ws://127.0.0.1:8194.",
         },
       ];
     } finally {
@@ -120,8 +121,15 @@
     }
   }
 
+  let unsubStatus: (() => void) | null = null;
   onMount(() => {
+    unsubStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
     scrollToBottom();
+    return () => {
+      if (unsubStatus) unsubStatus();
+    };
   });
 </script>
 
@@ -139,8 +147,8 @@
       </button>
       <span class="font-bold text-[#FFB000]">COPILOT &lt;GO&gt;</span>
       <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
-      <span class="px-1.5 py-0.2 rounded bg-[#00FF66]/10 text-[#00FF66] border border-[#00FF66]/30 text-3xs font-bold">
-        LOCAL ENGINE
+      <span class="px-1.5 py-0.2 rounded border text-3xs font-bold {connState === 'CONNECTED' ? 'bg-[#00FF66]/10 text-[#00FF66] border-[#00FF66]/30' : 'bg-[#FF3344]/10 text-[#FF3344] border-[#FF3344]/30'}">
+        {connState === "CONNECTED" ? "LIVE DAEMON" : "ENGINE OFFLINE"}
       </span>
     </div>
 

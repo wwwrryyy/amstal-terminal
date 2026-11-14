@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { ipcService } from "../lib/ipc";
   import type { AnalystRatingsData, ColorChannel } from "../lib/types";
 
@@ -18,7 +19,66 @@
     onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
 
-  let anr = $derived<AnalystRatingsData>(ipcService.getAnalystRatings(ticker));
+  let anr = $state<AnalystRatingsData | null>(ipcService.getAnalystRatings("NVDA"));
+  let connState = $state<string>(ipcService.connectionState);
+  let isLoading = $state<boolean>(false);
+  let unsubscribeStatus: (() => void) | null = null;
+  let unsubscribeIpc: (() => void) | null = null;
+
+  $effect(() => {
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      const cached = ipcService.getAnalystRatings(sym);
+      anr = cached;
+      if (connected) {
+        if (!cached) isLoading = true;
+        ipcService
+          .fetchAnalystRatings(sym)
+          .then((fresh) => {
+            if (fresh && sym === ticker) anr = fresh;
+          })
+          .finally(() => {
+            if (sym === ticker) isLoading = false;
+          });
+      } else {
+        isLoading = false;
+      }
+    }
+  });
+
+  onMount(() => {
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
+    unsubscribeIpc = ipcService.subscribe(() => {
+      const updated = ipcService.getAnalystRatings(ticker);
+      if (updated) anr = updated;
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubscribeStatus) unsubscribeStatus();
+    if (unsubscribeIpc) unsubscribeIpc();
+  });
+
+  let rev3mDeltaPct = $derived.by<number | null>(() => {
+    const revs = anr?.historical_revisions ?? [];
+    if (revs.length < 2) return null;
+    const latest = revs[0]?.mean_target;
+    const oldest = revs[revs.length - 1]?.mean_target;
+    if (latest === null || latest === undefined || oldest === null || oldest === undefined || oldest <= 0) {
+      return null;
+    }
+    return +(((latest - oldest) / oldest) * 100).toFixed(1);
+  });
+
+  let latestBuyRatio = $derived(anr?.historical_revisions?.[0]?.buy_pct ?? null);
+  let oldestBuyRatio = $derived(
+    anr?.historical_revisions && anr.historical_revisions.length > 0
+      ? anr.historical_revisions[anr.historical_revisions.length - 1].buy_pct
+      : null
+  );
 
   const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
     BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
@@ -51,34 +111,51 @@
     }
   }
 
-  // Calculate target range visual percentages (normalized between target_low and target_high)
-  let rangeSpan = $derived(Math.max(1, anr.target_high - anr.target_low));
-  let currentPosPct = $derived(
-    Math.min(100, Math.max(0, ((anr.current_price - anr.target_low) / rangeSpan) * 100))
-  );
-  let medianPosPct = $derived(
-    Math.min(100, Math.max(0, ((anr.target_median - anr.target_low) / rangeSpan) * 100))
-  );
-  let meanPosPct = $derived(
-    Math.min(100, Math.max(0, ((anr.target_mean - anr.target_low) / rangeSpan) * 100))
-  );
+  // Normalize range across [target_low, target_high, current_price, target_mean, target_median]
+  // so current price outside street low/high never clips or collides off-bar.
+  let rangeGeometry = $derived.by(() => {
+    if (
+      !anr ||
+      anr.target_low === null ||
+      anr.target_high === null ||
+      anr.target_mean === null ||
+      anr.current_price <= 0
+    ) {
+      return null;
+    }
+    const vals = [anr.target_low, anr.target_high, anr.current_price, anr.target_mean];
+    if (anr.target_median !== null) vals.push(anr.target_median);
+    const visMin = Math.min(...vals);
+    const visMax = Math.max(...vals);
+    const span = Math.max(0.01, visMax - visMin);
+    const pct = (v: number) => Math.min(97, Math.max(3, ((v - visMin) / span) * 100));
+    const currentPosPct = pct(anr.current_price);
+    const meanPosPct = pct(anr.target_mean);
+    const medianPosPct = anr.target_median !== null ? pct(anr.target_median) : null;
+    const fillLeft = Math.min(currentPosPct, meanPosPct);
+    const fillWidth = Math.abs(meanPosPct - currentPosPct);
+    const isUpside = anr.target_mean >= anr.current_price;
+    return { currentPosPct, meanPosPct, medianPosPct, fillLeft, fillWidth, isUpside };
+  });
 
   // Breakdown percentages
   let totalBreakdown = $derived(
-    Math.max(
-      1,
-      anr.ratings_breakdown.strong_buy +
-        anr.ratings_breakdown.buy +
-        anr.ratings_breakdown.hold +
-        anr.ratings_breakdown.underperform +
-        anr.ratings_breakdown.sell
-    )
+    anr
+      ? Math.max(
+          1,
+          anr.ratings_breakdown.strong_buy +
+            anr.ratings_breakdown.buy +
+            anr.ratings_breakdown.hold +
+            anr.ratings_breakdown.underperform +
+            anr.ratings_breakdown.sell
+        )
+      : 1
   );
-  let strongBuyPct = $derived((anr.ratings_breakdown.strong_buy / totalBreakdown) * 100);
-  let buyPct = $derived((anr.ratings_breakdown.buy / totalBreakdown) * 100);
-  let holdPct = $derived((anr.ratings_breakdown.hold / totalBreakdown) * 100);
-  let underperformPct = $derived((anr.ratings_breakdown.underperform / totalBreakdown) * 100);
-  let sellPct = $derived((anr.ratings_breakdown.sell / totalBreakdown) * 100);
+  let strongBuyPct = $derived(anr ? (anr.ratings_breakdown.strong_buy / totalBreakdown) * 100 : 0);
+  let buyPct = $derived(anr ? (anr.ratings_breakdown.buy / totalBreakdown) * 100 : 0);
+  let holdPct = $derived(anr ? (anr.ratings_breakdown.hold / totalBreakdown) * 100 : 0);
+  let underperformPct = $derived(anr ? (anr.ratings_breakdown.underperform / totalBreakdown) * 100 : 0);
+  let sellPct = $derived(anr ? (anr.ratings_breakdown.sell / totalBreakdown) * 100 : 0);
 </script>
 
 <div class="flex flex-col h-full w-full bg-[#0C111B] border border-[#172033] rounded select-none overflow-hidden text-xs font-mono">
@@ -111,6 +188,21 @@
 
   <!-- Content Container -->
   <div class="flex-1 flex flex-col p-2.5 gap-2.5 overflow-y-auto bg-[#06090F]">
+    {#if isLoading && !anr}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <span class="text-xs font-bold text-[#00D2FF]">FETCHING LIVE SELL-SIDE ANALYST CONSENSUS FOR {ticker}…</span>
+        <span class="text-2xs text-[#5E6D82] mt-1">Querying Yahoo Finance recommendations &amp; price targets.</span>
+      </div>
+    {:else if !anr || anr.available === false}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <span class="text-xs font-bold text-[#FFB000]">
+          {connState === "CONNECTED" ? `NO ANALYST CONSENSUS COVERAGE FOR ${ticker}` : "ENGINE DAEMON OFFLINE — NO SIMULATED RATINGS"}
+        </span>
+        <span class="text-2xs text-[#5E6D82] mt-1 max-w-md">
+          {anr?.message || (connState === "CONNECTED" ? "Ticker may be an ETF, index, or outside coverage universe." : "Connect live QARE-MM Python daemon on ws://127.0.0.1:8194 for authentic Wall Street consensus targets.")}
+        </span>
+      </div>
+    {:else}
     <!-- Top KPI Grid -->
     <div class="grid grid-cols-4 gap-2">
       <!-- Consensus Rating Badge -->
@@ -122,12 +214,13 @@
           </span>
           <span class="text-2xs text-[#8B98A5]">{anr.total_analysts} ANALYSTS</span>
         </div>
-        <!-- 5-Star / 5-Point Rating Bar -->
         <div class="mt-2 flex items-center gap-1.5">
-          <span class="text-2xs font-bold text-[#E2E8F0]">{anr.consensus_score.toFixed(2)} / 5.00</span>
+          <span class="text-2xs font-bold text-[#E2E8F0]">
+            {anr.consensus_score !== null ? `${anr.consensus_score.toFixed(2)} / 5.00` : "— / 5.00"}
+          </span>
           <div class="flex-1 bg-[#182030] h-1.5 rounded overflow-hidden">
             <div
-              style="width: {(anr.consensus_score / 5.0) * 100}%"
+              style="width: {anr.consensus_score !== null ? (anr.consensus_score / 5.0) * 100 : 0}%"
               class="h-full bg-[#00FF66]"
             ></div>
           </div>
@@ -138,12 +231,14 @@
       <div class="p-2.5 bg-[#111622] border border-[#1E2638] rounded flex flex-col justify-between">
         <span class="text-2xs text-[#64748B]">CURRENT PRICE</span>
         <div class="mt-1 flex items-baseline gap-1.5">
-          <span class="text-base font-bold text-[#E2E8F0]">${anr.current_price.toFixed(2)}</span>
+          <span class="text-base font-bold text-[#E2E8F0]">
+            {anr.current_price > 0 ? `$${anr.current_price.toFixed(2)}` : "$—"}
+          </span>
           <span class="text-2xs text-[#64748B]">USD</span>
         </div>
         <div class="text-2xs text-[#94A3B8]">
-          LOW: <span class="text-[#FF3344] font-semibold">${anr.target_low.toFixed(2)}</span>
-          | HIGH: <span class="text-[#00FF66] font-semibold">${anr.target_high.toFixed(2)}</span>
+          LOW: <span class="text-[#FF3344] font-semibold">{anr.target_low !== null ? `$${anr.target_low.toFixed(2)}` : "—"}</span>
+          | HIGH: <span class="text-[#00FF66] font-semibold">{anr.target_high !== null ? `$${anr.target_high.toFixed(2)}` : "—"}</span>
         </div>
       </div>
 
@@ -151,27 +246,39 @@
       <div class="p-2.5 bg-[#111622] border border-[#1E2638] rounded flex flex-col justify-between">
         <span class="text-2xs text-[#64748B]">12M CONSENSUS TARGET</span>
         <div class="mt-1 flex items-baseline gap-1.5">
-          <span class="text-base font-bold text-[#00D2FF]">${anr.target_mean.toFixed(2)}</span>
-          <span class="text-2xs {anr.upside_pct >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'} font-bold">
-            {anr.upside_pct >= 0 ? "+" : ""}{anr.upside_pct.toFixed(1)}%
-          </span>
+          <span class="text-base font-bold text-[#00D2FF]">{anr.target_mean !== null ? `$${anr.target_mean.toFixed(2)}` : "$—"}</span>
+          {#if anr.upside_pct !== null}
+            <span class="text-2xs {anr.upside_pct >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'} font-bold">
+              {anr.upside_pct >= 0 ? "+" : ""}{anr.upside_pct.toFixed(1)}%
+            </span>
+          {/if}
         </div>
         <div class="text-2xs text-[#94A3B8]">
-          MEDIAN: <span class="text-[#E2E8F0] font-semibold">${anr.target_median.toFixed(2)}</span>
+          MEDIAN: <span class="text-[#E2E8F0] font-semibold">{anr.target_median !== null ? `$${anr.target_median.toFixed(2)}` : "—"}</span>
         </div>
       </div>
 
       <!-- Revision Sentiment Trend -->
       <div class="p-2.5 bg-[#111622] border border-[#1E2638] rounded flex flex-col justify-between">
-        <span class="text-2xs text-[#64748B]">REVISION TREND (3M)</span>
+        <span class="text-2xs text-[#64748B]">REVISION TREND (HIST)</span>
         <div class="mt-1 flex items-baseline gap-1.5">
-          <span class="text-sm font-bold text-[#00FF66]">
-            +{((anr.target_mean - anr.historical_revisions[3].mean_target) / anr.historical_revisions[3].mean_target * 100).toFixed(1)}%
-          </span>
-          <span class="text-2xs text-[#64748B]">UPWARD DRIFT</span>
+          {#if rev3mDeltaPct !== null}
+            <span class="text-sm font-bold {rev3mDeltaPct >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+              {rev3mDeltaPct >= 0 ? "+" : ""}{rev3mDeltaPct.toFixed(1)}%
+            </span>
+            <span class="text-2xs text-[#64748B]">
+              {rev3mDeltaPct >= 0 ? "UPWARD DRIFT" : "DOWNWARD DRIFT"}
+            </span>
+          {:else}
+            <span class="text-sm font-bold text-[#8B98A5]">—</span>
+            <span class="text-2xs text-[#64748B]">NO PRIOR TARGET SERIES</span>
+          {/if}
         </div>
         <div class="text-2xs text-[#94A3B8]">
-          BUY RATIO: <span class="text-[#00FF66] font-bold">{anr.historical_revisions[0].buy_pct}%</span> (from {anr.historical_revisions[3].buy_pct}%)
+          BUY RATIO: <span class="text-[#00FF66] font-bold">{latestBuyRatio !== null ? `${latestBuyRatio.toFixed(1)}%` : "—"}</span>
+          {#if oldestBuyRatio !== null && latestBuyRatio !== null}
+            (from {oldestBuyRatio.toFixed(1)}%)
+          {/if}
         </div>
       </div>
     </div>
@@ -180,61 +287,61 @@
     <div class="p-3 bg-[#111622] border border-[#1E2638] rounded flex flex-col gap-2">
       <div class="flex items-center justify-between text-2xs">
         <span class="font-bold text-[#E2E8F0]">12-MONTH TARGET PRICE RANGE DISTRIBUTION</span>
-        <span class="text-[#64748B]">SPAN: ${anr.target_low.toFixed(2)} - ${anr.target_high.toFixed(2)}</span>
+        <span class="text-[#64748B]">
+          SPAN: {anr.target_low !== null ? `$${anr.target_low.toFixed(2)}` : "—"} - {anr.target_high !== null ? `$${anr.target_high.toFixed(2)}` : "—"}
+        </span>
       </div>
 
-      <!-- Range Graphic -->
-      <div class="relative w-full h-8 bg-[#0A0E17] rounded border border-[#1E2638] flex items-center px-4 my-2">
-        <!-- Target Range Bar (between Low and High) -->
-        <div class="w-full h-2 bg-[#182030] rounded relative">
-          <!-- Upside Fill from current to mean -->
-          {#if anr.target_mean >= anr.current_price}
+      {#if rangeGeometry}
+        <!-- Range Graphic (top track: NOW, bottom track: TARGET so labels never collide) -->
+        <div class="relative w-full h-11 bg-[#0A0E17] rounded border border-[#1E2638] flex items-center px-4 my-1">
+          <div class="w-full h-2 bg-[#182030] rounded relative">
             <div
-              style="left: {currentPosPct}%; width: {Math.max(0, meanPosPct - currentPosPct)}%"
-              class="absolute top-0 bottom-0 bg-[#00FF66]/30 border-y border-[#00FF66]/60"
+              style="left: {rangeGeometry.fillLeft}%; width: {rangeGeometry.fillWidth}%"
+              class="absolute top-0 bottom-0 {rangeGeometry.isUpside ? 'bg-[#00FF66]/30 border-y border-[#00FF66]/60' : 'bg-[#FF3344]/30 border-y border-[#FF3344]/60'}"
             ></div>
-          {/if}
 
-          <!-- Current Price Marker -->
-          <div
-            style="left: {currentPosPct}%"
-            class="absolute -top-3.5 -bottom-3.5 w-1 bg-[#E2E8F0] shadow-[0_0_8px_#FFF] z-20 flex flex-col items-center"
-            title="Current Price: ${anr.current_price.toFixed(2)}"
-          >
-            <span class="text-3xs font-bold text-[#E2E8F0] -mt-3.5 bg-[#0A0E17] px-1 rounded border border-[#1E2638] whitespace-nowrap">
-              NOW ${anr.current_price.toFixed(2)}
-            </span>
-          </div>
+            {#if rangeGeometry.medianPosPct !== null && anr.target_median !== null}
+              <div
+                style="left: {rangeGeometry.medianPosPct}%; transform: translateX(-50%);"
+                class="absolute -top-1 -bottom-1 w-0.5 bg-[#FFB000] z-10"
+                title={`Median Target: $${anr.target_median.toFixed(2)}`}
+              ></div>
+            {/if}
 
-          <!-- Median Marker -->
-          <div
-            style="left: {medianPosPct}%"
-            class="absolute -top-2.5 -bottom-2.5 w-0.5 bg-[#FFB000] z-10 flex flex-col items-center"
-            title="Median Target: ${anr.target_median.toFixed(2)}"
-          >
-            <span class="text-3xs font-semibold text-[#FFB000] mt-4 bg-[#0A0E17] px-1 rounded whitespace-nowrap">
-              MED ${anr.target_median.toFixed(2)}
-            </span>
-          </div>
+            <!-- Current Price Marker (Top track label) -->
+            <div
+              style="left: {rangeGeometry.currentPosPct}%; transform: translateX(-50%);"
+              class="absolute -top-3.5 -bottom-2 w-0.5 bg-[#E2E8F0] shadow-[0_0_6px_#FFF] z-20 flex flex-col items-center"
+              title={`Current Price: $${anr.current_price.toFixed(2)}`}
+            >
+              <span class="text-3xs font-bold text-[#E2E8F0] -mt-3.5 bg-[#0A0E17] px-1 rounded border border-[#1E2638] whitespace-nowrap">
+                NOW ${anr.current_price.toFixed(2)}
+              </span>
+            </div>
 
-          <!-- Mean Target Marker -->
-          <div
-            style="left: {meanPosPct}%"
-            class="absolute -top-3.5 -bottom-3.5 w-1 bg-[#00D2FF] shadow-[0_0_8px_#00D2FF] z-20 flex flex-col items-center"
-            title="Mean Target: ${anr.target_mean.toFixed(2)}"
-          >
-            <span class="text-3xs font-bold text-[#00D2FF] -mt-3.5 bg-[#0A0E17] px-1 rounded border border-[#1E2638] whitespace-nowrap">
-              TARGET ${anr.target_mean.toFixed(2)}
-            </span>
+            <!-- Mean Target Marker (Bottom track label) -->
+            <div
+              style="left: {rangeGeometry.meanPosPct}%; transform: translateX(-50%);"
+              class="absolute -top-2 -bottom-3.5 w-0.5 bg-[#00D2FF] shadow-[0_0_6px_#00D2FF] z-20 flex flex-col items-center justify-end"
+              title={`Mean Target: $${anr.target_mean?.toFixed(2)}`}
+            >
+              <span class="text-3xs font-bold text-[#00D2FF] -mb-3.5 bg-[#0A0E17] px-1 rounded border border-[#1E2638] whitespace-nowrap">
+                TARGET ${anr.target_mean?.toFixed(2)}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      {:else}
+        <div class="text-3xs text-[#5E6D82] py-2">Target range distribution unavailable for {ticker}.</div>
+      {/if}
 
       <div class="flex items-center justify-between text-2xs text-[#64748B]">
-        <span>STREET LOW: <strong class="text-[#FF3344]">${anr.target_low.toFixed(2)}</strong></span>
-        <span>CURRENT: <strong class="text-[#E2E8F0]">${anr.current_price.toFixed(2)}</strong></span>
-        <span>MEAN TARGET: <strong class="text-[#00D2FF]">${anr.target_mean.toFixed(2)}</strong></span>
-        <span>STREET HIGH: <strong class="text-[#00FF66]">${anr.target_high.toFixed(2)}</strong></span>
+        <span>STREET LOW: <strong class="text-[#FF3344]">{anr.target_low !== null ? `$${anr.target_low.toFixed(2)}` : "—"}</strong></span>
+        <span>CURRENT: <strong class="text-[#E2E8F0]">{anr.current_price > 0 ? `$${anr.current_price.toFixed(2)}` : "—"}</strong></span>
+        <span>MEDIAN: <strong class="text-[#FFB000]">{anr.target_median !== null ? `$${anr.target_median.toFixed(2)}` : "—"}</strong></span>
+        <span>MEAN TARGET: <strong class="text-[#00D2FF]">{anr.target_mean !== null ? `$${anr.target_mean.toFixed(2)}` : "—"}</strong></span>
+        <span>STREET HIGH: <strong class="text-[#00FF66]">{anr.target_high !== null ? `$${anr.target_high.toFixed(2)}` : "—"}</strong></span>
       </div>
     </div>
 
@@ -264,8 +371,8 @@
     <!-- Historical Target & Buy Ratio Revision Trajectory Table -->
     <div class="flex-1 bg-[#111622] border border-[#1E2638] rounded overflow-hidden flex flex-col">
       <div class="px-3 py-1.5 bg-[#182030] border-b border-[#1E2638] flex items-center justify-between text-2xs">
-        <span class="font-bold text-[#E2E8F0]">HISTORICAL TARGET REVISION TRAJECTORY</span>
-        <span class="text-[#64748B]">ROLLING QUARTERLY DRIFT</span>
+        <span class="font-bold text-[#E2E8F0]">RECOMMENDATION REVISION TRAJECTORY</span>
+        <span class="text-[#64748B]">MONTHLY BUY-RATIO TRENDS</span>
       </div>
 
       <div class="flex-1 overflow-x-auto overflow-y-auto">
@@ -275,37 +382,47 @@
               <th class="p-2">PERIOD</th>
               <th class="p-2 text-right">MEAN TARGET ($)</th>
               <th class="p-2 text-right">BUY / STRONG BUY (%)</th>
-              <th class="p-2 text-right">PRICE MOMENTUM DELTA</th>
+              <th class="p-2 text-right">TARGET DELTA</th>
               <th class="p-2 text-center">STREET SENTIMENT</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-[#1E2638]/60">
-            {#each anr.historical_revisions as rev, idx}
-              <tr class="hover:bg-[#182030]/40 transition-colors">
-                <td class="p-2 font-bold text-[#E2E8F0]">{rev.period}</td>
-                <td class="p-2 text-right font-mono text-[#00D2FF] font-bold">${rev.mean_target.toFixed(2)}</td>
-                <td class="p-2 text-right font-mono text-[#00FF66]">{rev.buy_pct.toFixed(1)}%</td>
-                <td class="p-2 text-right font-mono text-[#94A3B8]">
-                  {#if idx < anr.historical_revisions.length - 1}
-                    {@const diff = rev.mean_target - anr.historical_revisions[idx + 1].mean_target}
-                    <span class={diff >= 0 ? "text-[#00FF66]" : "text-[#FF3344]"}>
-                      {diff >= 0 ? "+" : ""}${diff.toFixed(2)}
-                    </span>
-                  {:else}
-                    <span class="text-[#64748B]">BASE</span>
-                  {/if}
-                </td>
-                <td class="p-2 text-center">
-                  <span class="px-2 py-0.5 rounded text-3xs font-bold {rev.buy_pct >= 85 ? 'bg-[#00FF66]/20 text-[#00FF66]' : rev.buy_pct >= 70 ? 'bg-[#00D2FF]/20 text-[#00D2FF]' : 'bg-[#FFB000]/20 text-[#FFB000]'}">
-                    {rev.buy_pct >= 85 ? 'HIGH CONVICTION' : rev.buy_pct >= 70 ? 'BULLISH' : 'NEUTRAL'}
-                  </span>
-                </td>
+            {#if anr.historical_revisions.length === 0}
+              <tr>
+                <td colspan="5" class="p-4 text-center text-[#5E6D82]">No historical recommendation revision rows returned.</td>
               </tr>
-            {/each}
+            {:else}
+              {#each anr.historical_revisions as rev, idx}
+                {@const prevTarget = anr.historical_revisions[idx + 1]?.mean_target ?? null}
+                <tr class="hover:bg-[#182030]/40 transition-colors">
+                  <td class="p-2 font-bold text-[#E2E8F0]">{rev.period}</td>
+                  <td class="p-2 text-right font-mono text-[#00D2FF] font-bold">
+                    {rev.mean_target !== null ? `$${rev.mean_target.toFixed(2)}` : "—"}
+                  </td>
+                  <td class="p-2 text-right font-mono text-[#00FF66]">{rev.buy_pct.toFixed(1)}%</td>
+                  <td class="p-2 text-right font-mono text-[#94A3B8]">
+                    {#if rev.mean_target !== null && prevTarget !== null}
+                      {@const diff = rev.mean_target - prevTarget}
+                      <span class={diff >= 0 ? "text-[#00FF66]" : "text-[#FF3344]"}>
+                        {diff >= 0 ? "+" : ""}${diff.toFixed(2)}
+                      </span>
+                    {:else}
+                      <span class="text-[#64748B]">—</span>
+                    {/if}
+                  </td>
+                  <td class="p-2 text-center">
+                    <span class="px-2 py-0.5 rounded text-3xs font-bold {rev.buy_pct >= 85 ? 'bg-[#00FF66]/20 text-[#00FF66]' : rev.buy_pct >= 70 ? 'bg-[#00D2FF]/20 text-[#00D2FF]' : 'bg-[#FFB000]/20 text-[#FFB000]'}">
+                      {rev.buy_pct >= 85 ? "HIGH CONVICTION" : rev.buy_pct >= 70 ? "BULLISH" : rev.buy_pct >= 50 ? "MODERATE" : "NEUTRAL / BEARISH"}
+                    </span>
+                  </td>
+                </tr>
+              {/each}
+            {/if}
           </tbody>
         </table>
       </div>
     </div>
+    {/if}
   </div>
 </div>
 

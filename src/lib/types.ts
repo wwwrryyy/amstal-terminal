@@ -5,18 +5,24 @@
 export type MacroRegimeState = "LOW_VOLATILITY" | "MEDIUM_VOLATILITY" | "HIGH_VOLATILITY";
 
 export interface MacroRegimeData {
+  available?: boolean;
   current_state: MacroRegimeState | string;
   state_index: number;
-  filtered_probabilities: {
-    low_volatility: number;
-    medium_volatility: number;
-    high_volatility: number;
+  filtered_probabilities?: {
+    low_volatility?: number;
+    medium_volatility?: number;
+    high_volatility?: number;
   };
-  kappa?: number; // Macro risk penalty multiplier (0.2 to 1.0)
+  kappa?: number | null; // Macro risk penalty multiplier (0.2 to 1.0)
   transition_matrix?: number[][];
+  state_volatilities?: number[];
+  stationary_distribution?: number[];
   regime_history?: Array<{
     timestamp: string;
     state_index: number;
+    p_low?: number;
+    p_med?: number;
+    p_high?: number;
     confidence: number;
   }>;
 }
@@ -74,6 +80,11 @@ export interface TickData {
   high_24h: number;
   low_24h: number;
   timestamp_ms: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  prev_close?: number;
+  date?: string;
 }
 
 export interface ConflatedStreamFrame {
@@ -98,7 +109,7 @@ export interface ParsedMnemonicCommand {
 }
 
 export interface OHLCVBar {
-  time: string; // YYYY-MM-DD or Unix timestamp
+  time: string | number; // YYYY-MM-DD or Unix epoch seconds
   open: number;
   high: number;
   low: number;
@@ -125,6 +136,21 @@ export interface FinancialFilingMetadata {
   restatement_delta_notes?: string;
 }
 
+export interface FinancialStatementsPayload {
+  ticker: string;
+  available: boolean;
+  source: string;
+  entity_name?: string;
+  cik?: string;
+  pit_strict: boolean;
+  filings: FinancialFilingMetadata[];
+  incomeStatement: FinancialMetricRow[];
+  balanceSheet: FinancialMetricRow[];
+  cashFlow: FinancialMetricRow[];
+  ratios: FinancialMetricRow[];
+  message?: string;
+}
+
 export type ColorChannel = "BLUE" | "AMBER" | "GREEN" | "RED" | "UNLINKED";
 
 export interface SecurityMasterData {
@@ -135,19 +161,20 @@ export interface SecurityMasterData {
   figi: string;
   gics_sector: string;
   gics_sub_industry: string;
-  beta_market_60d: number;
-  beta_sector_60d: number;
-  adv_30d_shares: number;
-  market_cap_billions: number;
-  pe_ratio_ltm: number;
-  pe_forward?: number;
-  dividend_yield_pct: number;
-  high_52w: number;
-  low_52w: number;
+  available_fundamentals?: boolean;
+  beta_market_60d: number | null;
+  beta_sector_60d: number | null;
+  adv_30d_shares: number | null;
+  market_cap_billions: number | null;
+  pe_ratio_ltm: number | null;
+  pe_forward?: number | null;
+  dividend_yield_pct: number | null;
+  high_52w: number | null;
+  low_52w: number | null;
   business_summary: string;
-  headquarters: string;
-  ceo: string;
-  employees: number;
+  headquarters: string | null;
+  ceo: string | null;
+  employees: number | null;
 }
 
 export type PeerNodeRole = "TARGET" | "GICS_PEER" | "LEAD_LAG" | "SECTOR_ETF";
@@ -157,10 +184,10 @@ export interface PeerGraphNode {
   role: PeerNodeRole;
   role_code: number;
   label: string;
-  cross_corr_5d?: number;
-  beta_market?: number;
-  return_5d?: number;
-  spillover_contribution?: number;
+  cross_corr_5d?: number | null;
+  beta_market?: number | null;
+  return_5d?: number | null;
+  spillover_contribution?: number | null;
 }
 
 export interface PeerGraphEdge {
@@ -198,12 +225,18 @@ export interface RedlineClauseDiff {
 
 export interface EdgarFilingRedlineData {
   ticker: string;
-  item1a_similarity: number;
-  mda_similarity: number;
-  item1a_sentiment_drift: number;
-  mda_catalyst_score: number;
+  available?: boolean;
+  filing_type?: string;
+  current_filing_date?: string | null;
+  prior_filing_date?: string | null;
+  acceptance_timestamp_et?: string;
+  item1a_similarity: number | null;
+  mda_similarity: number | null;
+  item1a_sentiment_drift: number | null;
+  mda_catalyst_score: number | null;
   redlines: RedlineClauseDiff[];
   form4_transactions: Form4Transaction[];
+  message?: string;
 }
 
 export interface NewsItemData {
@@ -211,7 +244,7 @@ export interface NewsItemData {
   source: string;
   published_at: string;
   finbert_score: number;
-  sentiment_label: "BULLISH" | "BEARISH" | "NEUTRAL";
+  sentiment_label: "BULLISH" | "BEARISH" | "NEUTRAL" | string;
   decay_half_life_days: number;
   decayed_sentiment: number;
 }
@@ -231,14 +264,16 @@ export interface HistoricalPriceRow {
 
 export interface AnalystRatingsData {
   ticker: string;
+  available?: boolean;
+  source?: string;
   current_price: number;
-  target_mean: number;
-  target_median: number;
-  target_high: number;
-  target_low: number;
-  upside_pct: number;
-  consensus_rating: "STRONG_BUY" | "BUY" | "HOLD" | "UNDERPERFORM" | "SELL";
-  consensus_score: number; // 1.0 - 5.0
+  target_mean: number | null;
+  target_median: number | null;
+  target_high: number | null;
+  target_low: number | null;
+  upside_pct: number | null;
+  consensus_rating: "STRONG_BUY" | "BUY" | "HOLD" | "UNDERPERFORM" | "SELL" | string;
+  consensus_score: number | null; // 1.0 - 5.0
   total_analysts: number;
   ratings_breakdown: {
     strong_buy: number;
@@ -249,9 +284,11 @@ export interface AnalystRatingsData {
   };
   historical_revisions: Array<{
     period: string;
-    mean_target: number;
+    mean_target: number | null;
     buy_pct: number;
+    total_analysts?: number;
   }>;
+  message?: string;
 }
 
 export interface CopilotMessage {

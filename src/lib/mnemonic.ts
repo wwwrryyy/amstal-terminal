@@ -49,7 +49,7 @@ export function parse_mnemonic_command(raw_input: string): ParsedMnemonicCommand
       raw_input: "",
       is_valid: false,
       has_go: false,
-      identifier: "SPY",
+      identifier: "",
       market: "US",
       asset_class: "EQUITY",
       mnemonic: "GP",
@@ -67,7 +67,7 @@ export function parse_mnemonic_command(raw_input: string): ParsedMnemonicCommand
     tokens = tokens.slice(0, -1);
   }
 
-  let identifier = "SPY";
+  let identifier = "";
   let market = "US";
   let asset_class = "EQUITY";
   let mnemonic = "GP";
@@ -90,16 +90,29 @@ export function parse_mnemonic_command(raw_input: string): ParsedMnemonicCommand
       identifier = tok;
     }
   } else if (tokens.length === 2) {
-    // e.g. "NVDA FA", "CRWD PORT", "AAPL GP"
+    // e.g. "NVDA FA", "CRWD PORT", "AAPL GP", "AAPL US"
     identifier = tokens[0].toUpperCase();
-    mnemonic = tokens[1].toUpperCase();
+    const second = tokens[1].toUpperCase();
+    if (RECOGNIZED_MARKETS.has(second)) {
+      market = second;
+    } else {
+      mnemonic = second;
+    }
   } else if (tokens.length >= 3) {
     identifier = tokens[0].toUpperCase();
-    if (RECOGNIZED_MARKETS.has(tokens[1].toUpperCase())) {
-      market = tokens[1].toUpperCase();
+    const second = tokens[1].toUpperCase();
+    if (RECOGNIZED_MARKETS.has(second)) {
+      market = second;
       mnemonic = tokens[2].toUpperCase();
+      if (tokens.length > 3) {
+        parameters.args = tokens.slice(3).map((t) => t.toUpperCase());
+      }
+    } else if (STANDALONE_MNEMONICS.has(second)) {
+      mnemonic = second;
+      parameters.args = tokens.slice(2).map((t) => t.toUpperCase());
     } else {
       mnemonic = tokens[tokens.length - 1].toUpperCase();
+      parameters.args = tokens.slice(1, -1).map((t) => t.toUpperCase());
     }
   }
 

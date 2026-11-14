@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { ipcService } from "../lib/ipc";
   import type { ColorChannel, HistoricalPriceRow } from "../lib/types";
 
@@ -18,7 +19,41 @@
     onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
 
-  let priceRows = $derived<HistoricalPriceRow[]>(ipcService.getHistoricalPrices(ticker, 45));
+  let priceRows = $state<HistoricalPriceRow[]>(ipcService.getHistoricalPrices("NVDA", 45));
+  let connState = $state<string>(ipcService.connectionState);
+  let unsubscribeStatus: (() => void) | null = null;
+  let unsubscribeIpc: (() => void) | null = null;
+
+  $effect(() => {
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      priceRows = ipcService.getHistoricalPrices(sym, 45);
+      if (connected) {
+        ipcService.fetchHistoricalPrices(sym, 45).then((fresh) => {
+          if (fresh && fresh.length > 0 && sym === ticker) priceRows = fresh;
+        });
+      }
+    }
+  });
+
+  onMount(() => {
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
+    unsubscribeIpc = ipcService.subscribe(() => {
+      const sym = ticker;
+      const latest = ipcService.getHistoricalPrices(sym, 45);
+      if (latest.length > 0 && latest !== priceRows) {
+        priceRows = latest;
+      }
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubscribeStatus) unsubscribeStatus();
+    if (unsubscribeIpc) unsubscribeIpc();
+  });
 
   const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
     BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
@@ -85,7 +120,9 @@
         {#if priceRows.length === 0}
           <tr>
             <td colspan="10" class="p-8 text-center text-[#5E6D82]">
-              NO RECORDED SESSIONS AVAILABLE FOR {ticker} &bull; MARKET CLOSED
+              {connState === "CONNECTED"
+                ? `NO HISTORICAL SESSIONS RETURNED FOR ${ticker}`
+                : "ENGINE DAEMON OFFLINE — NO SIMULATED HISTORICAL BARS"}
             </td>
           </tr>
         {:else}

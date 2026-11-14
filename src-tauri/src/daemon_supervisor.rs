@@ -91,19 +91,24 @@ impl DaemonSupervisor {
         PathBuf::from("../amstal-engine")
     }
 
-    /// Determines the Python interpreter to use (.venv preferred).
+    /// Determines the Python interpreter to use (.venv preferred across Unix and Windows).
     fn find_python_interpreter(engine_dir: &Path) -> PathBuf {
-        let venv_python = engine_dir.join(".venv/bin/python");
-        if venv_python.exists() {
-            return venv_python;
+        let candidates = [
+            engine_dir.join(".venv").join("bin").join("python"),
+            engine_dir.join(".venv").join("bin").join("python3"),
+            engine_dir.join(".venv").join("Scripts").join("python.exe"),
+        ];
+        for cand in &candidates {
+            if cand.exists() {
+                return cand.clone();
+            }
         }
 
-        let venv_python3 = engine_dir.join(".venv/bin/python3");
-        if venv_python3.exists() {
-            return venv_python3;
+        if cfg!(windows) {
+            PathBuf::from("python")
+        } else {
+            PathBuf::from("python3")
         }
-
-        PathBuf::from("python3")
     }
 
     /// Checks whether the WebSocket port is responding to TCP handshake.
@@ -181,10 +186,11 @@ impl DaemonSupervisor {
         let engine_dir = Self::find_engine_dir();
         let python_bin = Self::find_python_interpreter(&engine_dir);
 
+        let log_path = std::env::temp_dir().join("amstal_engine.log");
         let log_file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/tmp/amstal_engine.log")
+            .open(log_path)
             .ok();
 
         let stdout_cfg = log_file
@@ -222,6 +228,10 @@ impl DaemonSupervisor {
         if let Some(mut child) = guard.take() {
             let pid = child.id();
             let _ = child.kill();
+            let _ = child.wait();
+            if Path::new(&self.socket_path).exists() {
+                let _ = std::fs::remove_file(&self.socket_path);
+            }
             self.start_time = None;
             Ok(format!("Terminated managed engine daemon (PID {})", pid))
         } else {
@@ -314,4 +324,32 @@ pub fn restart_engine(
 ) -> Result<String, String> {
     let mut supervisor = state.lock().map_err(|e| e.to_string())?;
     supervisor.restart()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_engine_dir_and_python_interpreter() {
+        let engine_dir = DaemonSupervisor::find_engine_dir();
+        assert!(engine_dir.to_string_lossy().contains("amstal-engine"));
+        let py = DaemonSupervisor::find_python_interpreter(&engine_dir);
+        let py_str = py.to_string_lossy();
+        assert!(py_str.contains("python"));
+    }
+
+    #[test]
+    fn test_supervisor_stop_cleans_stale_socket() {
+        let sock_path = std::env::temp_dir().join("amstal_test_supervisor.sock");
+        let _ = std::fs::write(&sock_path, b"stale");
+        let mut sup = DaemonSupervisor::new(
+            sock_path.to_string_lossy().to_string(),
+            "127.0.0.1".to_string(),
+            8194,
+        );
+        let msg = sup.stop().expect("stop should succeed");
+        assert!(msg.contains("No managed child"));
+        assert!(!sock_path.exists());
+    }
 }

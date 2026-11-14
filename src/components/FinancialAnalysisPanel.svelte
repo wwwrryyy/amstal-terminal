@@ -1,6 +1,12 @@
 <script lang="ts">
-  import { get10YFinancialLakehouse } from "../lib/data_lake";
-  import type { ColorChannel, FinancialFilingMetadata, FinancialMetricRow } from "../lib/types";
+  import { onMount, onDestroy } from "svelte";
+  import { ipcService } from "../lib/ipc";
+  import type {
+    ColorChannel,
+    FinancialFilingMetadata,
+    FinancialMetricRow,
+    FinancialStatementsPayload,
+  } from "../lib/types";
 
   let {
     ticker = "NVDA",
@@ -36,43 +42,129 @@
   type StatementType = "INCOME" | "BALANCE" | "CASHFLOW" | "RATIOS";
 
   let activeStatement = $state<StatementType>("INCOME");
-  let pitStrict = $state<boolean>(true); // Point-in-Time strict cutoff toggle
+  let pitStrict = $state<boolean>(true);
   let selectedFiling = $state<FinancialFilingMetadata | null>(null);
+  let payload = $state<FinancialStatementsPayload | null>(null);
+  let connState = $state<string>(ipcService.connectionState);
+  let isLoading = $state<boolean>(false);
 
-  // Derived data based on ticker and pitStrict
-  let lakehouse = $derived(get10YFinancialLakehouse(ticker, pitStrict));
+  let unsubIpc: (() => void) | null = null;
+  let unsubStatus: (() => void) | null = null;
 
-  let currentRows = $derived.by<FinancialMetricRow[]>(() => {
-    switch (activeStatement) {
-      case "INCOME":
-        return lakehouse.incomeStatement;
-      case "BALANCE":
-        return lakehouse.balanceSheet;
-      case "CASHFLOW":
-        return lakehouse.cashFlow;
-      case "RATIOS":
-        return lakehouse.ratios;
-      default:
-        return lakehouse.incomeStatement;
+  function loadFinancials(sym: string, strict: boolean) {
+    const cached = ipcService.getFinancials(sym, strict);
+    if (cached) {
+      payload = cached;
+    } else {
+      payload = null;
+    }
+
+    if (ipcService.connectionState === "CONNECTED") {
+      if (!cached) isLoading = true;
+      ipcService
+        .fetchFinancials(sym, strict)
+        .then((res) => {
+          if (res && res.ticker === sym.toUpperCase()) {
+            payload = res;
+          }
+        })
+        .finally(() => {
+          isLoading = false;
+        });
+    } else {
+      isLoading = false;
+    }
+  }
+
+  onMount(() => {
+    unsubStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+      if (st === "CONNECTED") {
+        loadFinancials(ticker, pitStrict);
+      }
+    });
+
+    unsubIpc = ipcService.subscribe(() => {
+      const updated = ipcService.getFinancials(ticker, pitStrict);
+      if (updated) payload = updated;
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubIpc) unsubIpc();
+    if (unsubStatus) unsubStatus();
+  });
+
+  $effect(() => {
+    const sym = ticker;
+    const strict = pitStrict;
+    void connState;
+    selectedFiling = null;
+    if (sym) {
+      loadFinancials(sym, strict);
     }
   });
 
+  let filings = $derived(payload?.filings ?? []);
+
+  let currentRows = $derived.by<FinancialMetricRow[]>(() => {
+    if (!payload || !payload.available) return [];
+    switch (activeStatement) {
+      case "INCOME":
+        return payload.incomeStatement;
+      case "BALANCE":
+        return payload.balanceSheet;
+      case "CASHFLOW":
+        return payload.cashFlow;
+      case "RATIOS":
+        return payload.ratios;
+      default:
+        return payload.incomeStatement;
+    }
+  });
+
+  let revenueCagrDisplay = $derived.by(() => {
+    if (!payload || !payload.available || filings.length < 2) return "—";
+    const revRow = payload.incomeStatement.find((r) => r.tag === "Revenues");
+    if (!revRow) return "—";
+
+    const pts: Array<{ year: number; val: number }> = [];
+    for (const f of filings) {
+      const v = revRow.values[f.period];
+      if (typeof v === "number" && v > 0) {
+        const yMatch = (f.period_end_date || f.period).match(/\d{4}/);
+        if (yMatch) {
+          pts.push({ year: Number(yMatch[0]), val: v });
+        }
+      }
+    }
+    if (pts.length < 2) return "—";
+    pts.sort((a, b) => a.year - b.year);
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const span = last.year - first.year;
+    if (span <= 0 || first.val <= 0) return "—";
+    const cagr = (Math.pow(last.val / first.val, 1 / span) - 1) * 100;
+    return `${cagr >= 0 ? "+" : ""}${cagr.toFixed(1)}% (${span}Y)`;
+  });
+
+  let restatedFilingsCount = $derived(filings.filter((f) => f.is_restated).length);
+
   function formatValue(val: number | null, format: FinancialMetricRow["format"]): string {
-    if (val === null || val === undefined) return "—";
+    if (val === null || val === undefined || !Number.isFinite(val)) return "—";
     if (format === "currency") {
-      // Numbers are in millions
       if (Math.abs(val) >= 1000) {
         return `$${(val / 1000).toFixed(2)}B`;
       }
-      return `$${val.toLocaleString()}M`;
+      return `$${val.toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
     }
     if (format === "percent") {
       return `${val.toFixed(1)}%`;
     }
-    if (format === "number") {
+    if (format === "number" || format === "ratio") {
       return val.toFixed(2);
     }
-    return val.toString();
+    return String(val);
   }
 </script>
 
@@ -150,77 +242,83 @@
 
   <!-- Table Container -->
   <div class="flex-1 flex flex-col overflow-x-auto overflow-y-auto bg-[#06090F] custom-scrollbar">
-    <table class="w-max min-w-full text-2xs border-collapse font-mono select-text">
-      <!-- Period / SEC EDGAR Headers -->
-      <thead>
-        <tr class="bg-[#090D16] text-[#5E6D82] border-b border-[#172033] sticky top-0 z-10">
-          <th class="p-2 text-left sticky left-0 bg-[#090D16] z-20 min-w-[170px] border-r border-[#172033]">
-            FINANCIAL METRIC
-          </th>
-          {#each lakehouse.filings as f}
-            <th class="px-2.5 py-1.5 text-right min-w-[76px] border-r border-[#172033]/40">
-              <div class="font-bold text-[#E6EDF5]">{f.period}</div>
-              <button
-                onclick={() => (selectedFiling = f)}
-                class="text-3xs text-[#7A8B9E] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[76px] ml-auto text-right"
-                title={`Click for EDGAR Filing Metadata\nFiled: ${f.filed_date}\nPeriod End: ${f.period_end_date}\nAccession: ${f.accession_number}`}
-              >
-                10-K • {f.filed_date.slice(2, 7)}
-              </button>
+    {#if isLoading && !payload}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center font-mono">
+        <span class="text-xs font-bold text-[#00D2FF]">FETCHING SEC EDGAR XBRL COMPANYFACTS FOR {ticker}…</span>
+        <span class="text-2xs text-[#5E6D82] mt-1">Extracting point-in-time US-GAAP income, balance sheet, and cash flow statements.</span>
+      </div>
+    {:else if !payload || !payload.available || currentRows.length === 0}
+      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center font-mono">
+        <span class="text-xs font-bold text-[#FFB000]">
+          {connState === "CONNECTED" ? `NO SEC EDGAR XBRL FUNDAMENTALS FOR ${ticker}` : "ENGINE DAEMON OFFLINE — NO SIMULATED STATEMENTS"}
+        </span>
+        <span class="text-2xs text-[#5E6D82] mt-1 max-w-md">
+          {payload?.message || (connState === "CONNECTED" ? "Ticker may be an ETF, index, ADRs without US-GAAP XBRL tags, or network offline." : "Connect the live QARE-MM Python daemon on ws://127.0.0.1:8194 to retrieve authentic SEC EDGAR XBRL filings.")}
+        </span>
+      </div>
+    {:else}
+      <table class="w-max min-w-full text-2xs border-collapse font-mono select-text">
+        <!-- Period / SEC EDGAR Headers -->
+        <thead>
+          <tr class="bg-[#090D16] text-[#5E6D82] border-b border-[#172033] sticky top-0 z-10">
+            <th class="p-2 text-left sticky left-0 bg-[#090D16] z-20 min-w-[170px] border-r border-[#172033]">
+              FINANCIAL METRIC
             </th>
-          {/each}
-        </tr>
-      </thead>
-
-      <!-- Statement Rows -->
-      <tbody class="divide-y divide-[#172033]/60">
-        {#each currentRows as row}
-          {@const isHeaderMetric = row.tag === "Revenues" || row.tag === "GrossProfit" || row.tag === "OperatingIncome" || row.tag === "NetIncome" || row.tag === "TotalAssets" || row.tag === "StockholdersEquity" || row.tag === "FreeCashFlow"}
-          <tr class="hover:bg-[#0C111B] transition-colors {isHeaderMetric ? 'bg-[#090D16]/70' : ''}">
-            <td class="p-1.5 sticky left-0 z-10 border-r border-[#172033] truncate {isHeaderMetric ? 'bg-[#090D16] text-[#00D2FF] font-bold' : 'bg-[#0C111B] text-[#E6EDF5] font-semibold'}">
-              {row.label}
-            </td>
-            {#each lakehouse.filings as f}
-              {@const val = row.values[f.period]}
-              <td class="px-2.5 py-1.5 text-right font-mono border-r border-[#172033]/30 {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
-                {formatValue(val, row.format)}
-              </td>
+            {#each filings as f}
+              <th class="px-2.5 py-1.5 text-right min-w-[76px] border-r border-[#172033]/40">
+                <div class="font-bold text-[#E6EDF5]">{f.period}</div>
+                <button
+                  onclick={() => (selectedFiling = f)}
+                  class="text-3xs text-[#7A8B9E] hover:text-[#00D2FF] hover:underline cursor-pointer block mt-0.5 font-mono tracking-tight transition-colors truncate max-w-[82px] ml-auto text-right"
+                  title={`Click for EDGAR Filing Metadata\nFiled: ${f.filed_date}\nPeriod End: ${f.period_end_date}\nAccession: ${f.accession_number}`}
+                >
+                  10-K {f.filed_date ? f.filed_date.slice(0, 7) : ""}
+                </button>
+              </th>
             {/each}
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+
+        <!-- Statement Rows -->
+        <tbody class="divide-y divide-[#172033]/60">
+          {#each currentRows as row}
+            {@const isHeaderMetric = row.tag === "Revenues" || row.tag === "GrossProfit" || row.tag === "OperatingIncome" || row.tag === "NetIncome" || row.tag === "TotalAssets" || row.tag === "StockholdersEquity" || row.tag === "FreeCashFlow"}
+            <tr class="hover:bg-[#0C111B] transition-colors {isHeaderMetric ? 'bg-[#090D16]/70' : ''}">
+              <td class="p-1.5 sticky left-0 z-10 border-r border-[#172033] truncate {isHeaderMetric ? 'bg-[#090D16] text-[#00D2FF] font-bold' : 'bg-[#0C111B] text-[#E6EDF5] font-semibold'}">
+                {row.label}
+              </td>
+              {#each filings as f}
+                {@const val = row.values[f.period] ?? null}
+                <td class="px-2.5 py-1.5 text-right font-mono border-r border-[#172033]/30 {isHeaderMetric ? 'text-[#E6EDF5] font-semibold' : 'text-[#8B98A5]'}">
+                  {formatValue(val, row.format)}
+                </td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
   </div>
 
   <!-- Financial Lakehouse Audit & Point-in-Time Status Footer -->
   <div class="px-3 py-1.5 bg-[#090D16] border-t border-[#172033] flex items-center justify-between text-2xs font-mono">
     <div class="flex items-center gap-3">
       <span class="text-[#5E6D82]">
-        XBRL AUDIT: <strong class="text-[#00FF66]">US-GAAP 2026 CERTIFIED</strong>
+        SOURCE: <strong class={payload?.available ? "text-[#00FF66]" : "text-[#8B98A5]"}>{payload?.source || "UNAVAILABLE"}</strong>
       </span>
       <span class="text-[#5E6D82]">|</span>
       <span class="text-[#5E6D82]">
-        10Y REVENUE CAGR: <strong class="text-[#E6EDF5]">
-          {(() => {
-            const revRow = lakehouse.incomeStatement.find((r) => r.tag === "Revenues");
-            const rEnd = revRow?.values["FY2026"];
-            const rStart = revRow?.values["FY2016"] ?? revRow?.values["FY2017"];
-            if (rEnd && rStart && rStart > 0) {
-              const years = revRow?.values["FY2016"] ? 10 : 9;
-              const cagr = (Math.pow(rEnd / rStart, 1 / years) - 1) * 100;
-              return `${cagr >= 0 ? "+" : ""}${cagr.toFixed(1)}%`;
-            }
-            return "+13.3%";
-          })()}
+        REVENUE CAGR: <strong class="text-[#E6EDF5]">{revenueCagrDisplay}</strong>
+      </span>
+      <span class="text-[#5E6D82]">|</span>
+      <span class="text-[#5E6D82]">
+        RESTATEMENT CHECK: <strong class={pitStrict ? "text-[#00FF66]" : restatedFilingsCount > 0 ? "text-[#FFB000]" : "text-[#E6EDF5]"}>
+          {pitStrict ? "STRICT PIT CUTOFF" : `${restatedFilingsCount} RESTATED PERIOD(S)`}
         </strong>
-      </span>
-      <span class="text-[#5E6D82]">|</span>
-      <span class="text-[#5E6D82]">
-        RESTATED SHIFT: <strong class={pitStrict ? "text-[#00FF66]" : "text-[#FFB000]"}>{pitStrict ? "0.0% (STRICT ZERO-LOOKAHEAD)" : "+0.4% (ASC 606 APPLIED)"}</strong>
       </span>
     </div>
     <div class="text-[#5E6D82]">
-      SEC EDGAR CIK: <strong class="text-[#00D2FF]">{lakehouse.filings[0]?.accession_number.split('-')[0] ?? '0000320193'}</strong>
+      SEC EDGAR CIK: <strong class="text-[#00D2FF]">{payload?.cik || "—"}</strong>
     </div>
   </div>
 
@@ -232,6 +330,16 @@
         <span class="text-[#5E6D82]">FILED: <strong class="text-[#E6EDF5]">{selectedFiling.filed_date}</strong></span>
         <span class="text-[#5E6D82]">PERIOD END: <strong class="text-[#E6EDF5]">{selectedFiling.period_end_date}</strong></span>
         <span class="text-[#5E6D82]">ACCESSION: <code class="text-[#FFB000]">{selectedFiling.accession_number}</code></span>
+        {#if selectedFiling.sec_url}
+          <a
+            href={selectedFiling.sec_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-[#00D2FF] underline hover:text-white"
+          >
+            SEC.GOV
+          </a>
+        {/if}
         {#if selectedFiling.is_restated}
           <span class="px-1.5 py-0.5 rounded bg-[#FF3344]/20 text-[#FF3344] text-3xs font-bold border border-[#FF3344]/40">
             RESTATEMENT DETECTED: {selectedFiling.restatement_delta_notes}

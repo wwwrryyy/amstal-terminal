@@ -4,6 +4,8 @@ import {
   type ParsedMnemonicCommand,
   type QARESignalFrame,
   type TickData,
+  type OHLCVBar,
+  type FinancialStatementsPayload,
   type SecurityMasterData,
   type PeerGraphData,
   type EdgarFilingRedlineData,
@@ -15,19 +17,6 @@ import {
   type LakehouseStats,
   type ParquetQueryResult,
 } from "./types";
-import {
-  createDefaultSignalFrame,
-  getSecurityMaster,
-  getPeerGraph,
-  getEdgarFilingData,
-  getNewsFeed,
-  getHistoricalPrices,
-  getAnalystRatings,
-  queryCopilot,
-  SAMPLE_TICKERS,
-} from "./data_lake";
-import { UNIVERSE_PRICES, UNIVERSE_METRICS } from "./universe_data";
-import { RECORDED_BARS } from "./universe_bars";
 import { parse_mnemonic_command } from "./mnemonic";
 
 export type ConnectionState = "CONNECTED" | "CONNECTING" | "DISCONNECTED";
@@ -55,32 +44,31 @@ export class IpcClientService {
   private wsUrl: string = "ws://127.0.0.1:8194";
   private reconnectIntervalMs: number = 3000;
   private reconnectTimer: any = null;
+  private pingTimer: any = null;
   private isDestroyed: boolean = false;
   private reqIdCounter: number = 1;
 
   // Active state
   public connectionState: ConnectionState = "CONNECTING";
-  public latencyMs: number = 12;
+  public latencyMs: number | null = null;
   public lastMessageTimestamp: number = 0;
+  public lastError: string | null = null;
 
-  // Cache
+  // Live cache (populated exclusively from QARE-MM backend RPC / WebSocket frames)
   public signals: Map<string, QARESignalFrame> = new Map();
   public ticks: Map<string, TickData> = new Map();
-  public macroRegime: MacroRegimeData = {
-    current_state: "LOW_VOLATILITY",
-    state_index: 0,
-    filtered_probabilities: {
-      low_volatility: 0.812,
-      medium_volatility: 0.145,
-      high_volatility: 0.043,
-    },
-    kappa: 0.80,
-    transition_matrix: [
-      [0.898, 0.096, 0.006],
-      [0.185, 0.766, 0.049],
-      [0.012, 0.321, 0.667],
-    ],
-  };
+  public securityMasters: Map<string, SecurityMasterData> = new Map();
+  public peerGraphs: Map<string, PeerGraphData> = new Map();
+  public edgarFilings: Map<string, EdgarFilingRedlineData> = new Map();
+  public newsFeeds: Map<string, NewsItemData[]> = new Map();
+  public historicalPrices: Map<string, HistoricalPriceRow[]> = new Map();
+  public historicalCandles: Map<string, OHLCVBar[]> = new Map();
+  public analystRatings: Map<string, AnalystRatingsData> = new Map();
+  public financials: Map<string, FinancialStatementsPayload> = new Map();
+  public portfolio: Record<string, any> | null = null;
+  private fetchTimestamps: Map<string, number> = new Map();
+  private inflightFetches: Map<string, Promise<any>> = new Map();
+  public macroRegime: MacroRegimeData | null = null;
 
   // Subscribers
   private listeners: Set<(frame: ConflatedStreamFrame) => void> = new Set();
@@ -88,41 +76,31 @@ export class IpcClientService {
 
   constructor(wsUrl: string = "ws://127.0.0.1:8194") {
     this.wsUrl = wsUrl;
-    this.initDefaultData();
     this.connect();
   }
 
-  private initDefaultData(): void {
-    for (const ticker of SAMPLE_TICKERS) {
-      const m = UNIVERSE_METRICS[ticker];
-      const price = m?.close ?? UNIVERSE_PRICES[ticker] ?? 0.0;
-      const change = m?.change ?? 0.0;
-      const changePct = m?.change_pct ?? 0.0;
-
-      this.ticks.set(ticker, {
-        ticker,
-        price,
-        change,
-        change_pct: changePct,
-        bid: price,
-        ask: price,
-        volume: m?.adv_30d ?? 0,
-        high_24h: m?.high_52w ?? price,
-        low_24h: m?.low_52w ?? price,
-        timestamp_ms: Date.now(),
-      });
-
-      this.signals.set(ticker, createDefaultSignalFrame(ticker, price));
-    }
-  }
-
   public isMarketSessionOpen(d: Date = new Date()): boolean {
-    const day = d.getUTCDay();
-    // 0 = Sunday, 6 = Saturday -> Exchange Closed
-    if (day === 0 || day === 6) return false;
-    const utcHours = d.getUTCHours() + d.getUTCMinutes() / 60;
-    // 9:30 AM to 4:00 PM US Eastern is approx 13:30 to 21:00 UTC
-    return utcHours >= 13.5 && utcHours <= 21.0;
+    try {
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const parts = fmt.formatToParts(d);
+      const weekday = parts.find((p) => p.type === "weekday")?.value;
+      if (weekday === "Sat" || weekday === "Sun") return false;
+      const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+      const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+      const etMinutes = hour * 60 + minute;
+      return etMinutes >= 9 * 60 + 30 && etMinutes <= 16 * 60;
+    } catch {
+      const day = d.getUTCDay();
+      if (day === 0 || day === 6) return false;
+      const utcHours = d.getUTCHours() + d.getUTCMinutes() / 60;
+      return utcHours >= 13.5 && utcHours <= 21.0;
+    }
   }
 
   public subscribe(callback: (frame: ConflatedStreamFrame) => void): () => void {
@@ -159,6 +137,8 @@ export class IpcClientService {
       this.ws.onopen = () => {
         this.setStatus("CONNECTED");
         this.sendPing();
+        if (this.pingTimer) clearInterval(this.pingTimer);
+        this.pingTimer = setInterval(() => this.sendPing(), 2000);
         this.hydrateFromLiveEngine();
       };
 
@@ -176,6 +156,11 @@ export class IpcClientService {
       };
 
       this.ws.onclose = () => {
+        if (this.pingTimer) {
+          clearInterval(this.pingTimer);
+          this.pingTimer = null;
+        }
+        this.latencyMs = null;
         if (!this.isDestroyed) {
           this.setStatus("DISCONNECTED");
           this.scheduleReconnect();
@@ -197,8 +182,41 @@ export class IpcClientService {
     }, this.reconnectIntervalMs);
   }
 
+  private normalizeTick(sym: string, raw: any): TickData {
+    const price = Number(raw?.price ?? 0);
+    return {
+      ticker: (raw?.ticker || sym).toUpperCase(),
+      price,
+      change: Number(raw?.change ?? 0),
+      change_pct: Number(raw?.change_pct ?? 0),
+      bid: Number(raw?.bid ?? price),
+      ask: Number(raw?.ask ?? price),
+      volume: Number(raw?.volume ?? 0),
+      high_24h: Number(raw?.high_24h ?? raw?.high ?? price),
+      low_24h: Number(raw?.low_24h ?? raw?.low ?? price),
+      timestamp_ms: Number(raw?.timestamp_ms ?? Date.now()),
+      open: raw?.open !== undefined ? Number(raw.open) : undefined,
+      high: raw?.high !== undefined ? Number(raw.high) : undefined,
+      low: raw?.low !== undefined ? Number(raw.low) : undefined,
+      prev_close: raw?.prev_close !== undefined ? Number(raw.prev_close) : undefined,
+      date: typeof raw?.date === "string" ? raw.date : undefined,
+    };
+  }
+
+  private emitFrame(frame: ConflatedStreamFrame): void {
+    for (const listener of this.listeners) {
+      listener(frame);
+    }
+  }
+
   private handleInboundMessage(payload: any): void {
     this.lastMessageTimestamp = Date.now();
+
+    // Heartbeat / RPC RTT ping latency update
+    if (payload?.result?.status === "PONG" && typeof payload?.result?.client_timestamp === "number") {
+      this.latencyMs = Math.max(1, Date.now() - payload.result.client_timestamp);
+      return;
+    }
 
     if (payload.type === "CONNECTION_ESTABLISHED") {
       this.setStatus("CONNECTED");
@@ -207,51 +225,45 @@ export class IpcClientService {
 
     if (payload.type === "CONFLATED_STREAM_FRAME") {
       if (payload.ticks) {
-        for (const [sym, tick] of Object.entries(payload.ticks)) {
-          this.ticks.set(sym, tick as TickData);
+        const normalizedTicks: Record<string, TickData> = {};
+        for (const [sym, rawTick] of Object.entries(payload.ticks)) {
+          const t = this.normalizeTick(sym, rawTick);
+          this.ticks.set(sym.toUpperCase(), t);
+          normalizedTicks[sym.toUpperCase()] = t;
         }
+        payload.ticks = normalizedTicks;
       }
       if (payload.signals) {
         for (const [sym, sig] of Object.entries(payload.signals)) {
-          this.signals.set(sym, sig as QARESignalFrame);
+          this.signals.set(sym.toUpperCase(), sig as QARESignalFrame);
         }
       }
       if (payload.macro_regime) {
         this.macroRegime = payload.macro_regime as MacroRegimeData;
       }
 
-      for (const listener of this.listeners) {
-        listener(payload as ConflatedStreamFrame);
-      }
+      this.emitFrame(payload as ConflatedStreamFrame);
     }
   }
 
   private async hydrateFromLiveEngine(): Promise<void> {
     try {
-      const regRes = await this.executeJsonRpc<MacroRegimeData>("get_macro_regime");
-      if (regRes.result) {
-        this.macroRegime = regRes.result;
-      }
-      const sigUpdates: Record<string, QARESignalFrame> = {};
-      for (const sym of ["NVDA", "MSFT", "AAPL", "CRWD"]) {
-        const sigRes = await this.executeJsonRpc<QARESignalFrame>("get_signal", { ticker: sym });
-        if (sigRes.result && sigRes.result.execution_recommendation) {
-          this.signals.set(sym, sigRes.result);
-          sigUpdates[sym] = sigRes.result;
-        }
-      }
-      const frame: ConflatedStreamFrame = {
-        type: "CONFLATED_STREAM_FRAME",
-        conflation_interval_ms: 100,
-        timestamp_ms: Date.now(),
-        signals: sigUpdates,
-        macro_regime: this.macroRegime,
-      };
-      for (const listener of this.listeners) {
-        listener(frame);
-      }
-    } catch {
-      // fallback silently if initial hydration fails
+      await Promise.all([
+        this.fetchMacroRegime(true),
+        this.fetchPortfolio(true),
+      ]);
+
+      const coreTickers = ["NVDA", "MSFT", "AAPL", "CRWD", "SPY", "TSLA"];
+      await Promise.all(
+        coreTickers.map(async (sym) => {
+          await Promise.all([
+            this.fetchSignal(sym, true),
+            this.fetchTick(sym, true),
+          ]);
+        })
+      );
+    } catch (err) {
+      this.lastError = err instanceof Error ? err.message : String(err);
     }
   }
 
@@ -280,26 +292,51 @@ export class IpcClientService {
   public async executeJsonRpc<T = any>(method: string, params: Record<string, any> = {}): Promise<JsonRpcResponse<T>> {
     const id = this.reqIdCounter++;
 
-    // If active websocket is open and daemon is online, dispatch through it
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return new Promise((resolve) => {
+        let settled = false;
+        const finish = (resp: JsonRpcResponse<T>) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          this.ws?.removeEventListener("message", tempHandler);
+          this.ws?.removeEventListener("close", closeHandler);
+          resolve(resp);
+        };
+
         const tempHandler = (e: MessageEvent) => {
           try {
             const data = JSON.parse(e.data);
             if (data.id === id) {
-              clearTimeout(timeout);
-              this.ws?.removeEventListener("message", tempHandler);
-              resolve(data);
+              finish(data);
             }
           } catch {}
         };
 
+        const closeHandler = () => {
+          finish({
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: `WebSocket disconnected during ${method}`,
+            },
+            id,
+          });
+        };
+
         const timeout = setTimeout(() => {
-          this.ws?.removeEventListener("message", tempHandler);
-          resolve(this.localLakehouseRpcResponse(method, params, id));
-        }, 1500);
+          finish({
+            jsonrpc: "2.0",
+            error: {
+              code: -32001,
+              message: `RPC request timed out after 8000ms (${method})`,
+            },
+            id,
+          });
+        }, 8000);
 
         this.ws?.addEventListener("message", tempHandler);
+        this.ws?.addEventListener("close", closeHandler);
         this.ws?.send(
           JSON.stringify({
             jsonrpc: "2.0",
@@ -311,230 +348,444 @@ export class IpcClientService {
       });
     }
 
-    // Fallback: synchronous institutional response provider matching engine logic
-    return this.localLakehouseRpcResponse(method, params, id);
-  }
-
-  private localLakehouseRpcResponse<T = any>(method: string, params: Record<string, any>, id: number): JsonRpcResponse<T> {
-    switch (method) {
-      case "ping":
-        return {
-          jsonrpc: "2.0",
-          result: {
-            status: "PONG",
-            client_timestamp: params.timestamp,
-            server_timestamp: Date.now(),
-          } as any,
-          id,
-        };
-
-      case "execute_command": {
-        const raw_input = params.raw_input || "";
-        const parsed = parse_mnemonic_command(raw_input);
-        return {
-          jsonrpc: "2.0",
-          result: {
-            status: "COMMAND_PROCESSED",
-            raw_input,
-            parsed,
-            timestamp: Date.now(),
-          } as any,
-          id,
-        };
-      }
-
-      case "get_signal": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        let sig = this.signals.get(ticker);
-        if (!sig) {
-          sig = createDefaultSignalFrame(ticker);
-          this.signals.set(ticker, sig);
-        }
-        return {
-          jsonrpc: "2.0",
-          result: sig as any,
-          id,
-        };
-      }
-
-      case "get_portfolio": {
-        return {
-          jsonrpc: "2.0",
-          result: {
-            allocations: {
-              NVDA: 0.185,
-              AAPL: 0.142,
-              MSFT: 0.168,
-              CRWD: 0.085,
-              SPY: 0.22,
-            },
-            gross_exposure: 0.8,
-            net_exposure: 0.65,
-            expected_growth_rate: 0.142,
-            friction_bps: 15.0,
-          } as any,
-          id,
-        };
-      }
-
-      case "get_macro_regime": {
-        return {
-          jsonrpc: "2.0",
-          result: this.macroRegime as any,
-          id,
-        };
-      }
-
-      case "get_security_master": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = getSecurityMaster(ticker);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "get_peer_graph": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = getPeerGraph(ticker);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "get_edgar_filings": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = getEdgarFilingData(ticker);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "get_news_feed": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = getNewsFeed(ticker);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "get_historical_prices": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const count = params.count || 30;
-        const data = getHistoricalPrices(ticker, count);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "get_analyst_ratings": {
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = getAnalystRatings(ticker);
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      case "copilot_query": {
-        const query = params.query || "";
-        const ticker = (params.ticker || "SPY").toUpperCase();
-        const data = {
-          answer: `Amstal Quant Copilot analyzed your request for ${ticker}. Factor composite indicates strong momentum and robust balance sheet liquidity under Point-in-Time filtering.`,
-          sources: ["Amstal Engine Local IPC", "Security Master DB", "FactSet Consensus"],
-          suggested_commands: [`${ticker} GP <GO>`, `${ticker} PORT <GO>`, `${ticker} ANR <GO>`],
-          model: "amstal-quant-copilot-deterministic-v1.3",
-        };
-        return {
-          jsonrpc: "2.0",
-          result: data as any,
-          id,
-        };
-      }
-
-      default:
-        return {
-          jsonrpc: "2.0",
-          error: {
-            code: -32601,
-            message: `Method not found: ${method}`,
-          },
-          id,
-        };
-    }
-  }
-
-  public getSignal(ticker: string): QARESignalFrame {
-    const t = ticker.toUpperCase();
-    let s = this.signals.get(t);
-    if (!s) {
-      s = createDefaultSignalFrame(t);
-      this.signals.set(t, s);
-    }
-    return s;
-  }
-
-  public getTick(ticker: string): TickData {
-    const t = ticker.toUpperCase();
-    let tick = this.ticks.get(t);
-    if (!tick) {
-      const um = UNIVERSE_METRICS[t];
-      const price = um?.close ?? UNIVERSE_PRICES[t] ?? 0.0;
-      const change = um?.change ?? 0.0;
-      const changePct = um?.change_pct ?? 0.0;
-      tick = {
-        ticker: t,
-        price,
-        change,
-        change_pct: changePct,
-        bid: price,
-        ask: price,
-        volume: um?.adv_30d ?? 0,
-        high_24h: um?.high_52w ?? price,
-        low_24h: um?.low_52w ?? price,
-        timestamp_ms: Date.now(),
+    if (method === "execute_command") {
+      const raw_input = params.raw_input || "";
+      const parsed = parse_mnemonic_command(raw_input);
+      return {
+        jsonrpc: "2.0",
+        result: {
+          status: "COMMAND_PROCESSED",
+          raw_input,
+          parsed,
+          timestamp: Date.now(),
+        } as any,
+        id,
       };
-      this.ticks.set(t, tick);
     }
-    return tick;
+
+    return {
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Engine daemon not connected (no simulated fallback)",
+      },
+      id,
+    };
   }
 
-  public getSecurityMaster(ticker: string): SecurityMasterData {
-    return getSecurityMaster(ticker);
+  public getMacroRegime(): MacroRegimeData | null {
+    return this.macroRegime;
   }
 
-  public getPeerGraph(ticker: string): PeerGraphData {
-    return getPeerGraph(ticker);
+  public getSignal(ticker: string): QARESignalFrame | null {
+    return this.signals.get(ticker.toUpperCase()) ?? null;
   }
 
-  public getEdgarFilings(ticker: string): EdgarFilingRedlineData {
-    return getEdgarFilingData(ticker);
+  public getTick(ticker: string): TickData | null {
+    return this.ticks.get(ticker.toUpperCase()) ?? null;
+  }
+
+  private isLiveConnected(): boolean {
+    return this.connectionState === "CONNECTED" && Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
+  }
+
+  private async fetchWithTtl<T>(
+    cacheKey: string,
+    ttlMs: number,
+    force: boolean,
+    loader: () => Promise<T | null>,
+    getCached?: () => T | null
+  ): Promise<T | null> {
+    if (!this.isLiveConnected()) return null;
+    const now = Date.now();
+    const last = this.fetchTimestamps.get(cacheKey) ?? 0;
+    if (!force && now - last < ttlMs) {
+      return getCached ? getCached() : null;
+    }
+
+    const existing = this.inflightFetches.get(cacheKey);
+    if (existing) return existing;
+
+    const p = (async () => {
+      try {
+        const res = await loader();
+        if (res !== null) {
+          this.fetchTimestamps.set(cacheKey, Date.now());
+        }
+        return res;
+      } catch (err) {
+        this.lastError = err instanceof Error ? err.message : String(err);
+        return null;
+      } finally {
+        this.inflightFetches.delete(cacheKey);
+      }
+    })();
+    this.inflightFetches.set(cacheKey, p);
+    return p;
+  }
+
+  public async fetchMacroRegime(force: boolean = false): Promise<MacroRegimeData | null> {
+    return this.fetchWithTtl(
+      "macro_regime",
+      30_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<MacroRegimeData>("get_macro_regime");
+        if (res.result && res.result.filtered_probabilities) {
+          this.macroRegime = res.result;
+          this.emitFrame({
+            type: "CONFLATED_STREAM_FRAME",
+            timestamp_ms: Date.now(),
+            macro_regime: res.result,
+          });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.macroRegime
+    );
+  }
+
+  public async fetchTick(ticker: string, force: boolean = false): Promise<TickData | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `tick:${t}`,
+      5_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<any>("get_tick", { ticker: t });
+        if (res.result && Number(res.result.price) > 0) {
+          const norm = this.normalizeTick(t, res.result);
+          this.ticks.set(t, norm);
+          this.emitFrame({
+            type: "CONFLATED_STREAM_FRAME",
+            timestamp_ms: Date.now(),
+            ticks: { [t]: norm },
+          });
+          return norm;
+        }
+        return null;
+      },
+      () => this.ticks.get(t) ?? null
+    );
+  }
+
+  public async fetchSignal(ticker: string, force: boolean = false): Promise<QARESignalFrame | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `signal:${t}`,
+      15_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<QARESignalFrame>("get_signal", { ticker: t });
+        if (res.result && res.result.execution_recommendation) {
+          this.signals.set(t, res.result);
+          this.emitFrame({
+            type: "CONFLATED_STREAM_FRAME",
+            timestamp_ms: Date.now(),
+            signals: { [t]: res.result },
+          });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.signals.get(t) ?? null
+    );
+  }
+
+  public async fetchPortfolio(force: boolean = false): Promise<Record<string, any> | null> {
+    return this.fetchWithTtl(
+      "portfolio",
+      30_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<Record<string, any>>("get_portfolio");
+        if (res.result && res.result.allocations) {
+          this.portfolio = res.result;
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.portfolio
+    );
+  }
+
+  public getCachedHistoricalCandles(ticker: string, interval: string = "1D"): OHLCVBar[] | null {
+    const key = `${ticker.toUpperCase()}:${interval.toLowerCase()}`;
+    return this.historicalCandles.get(key) ?? null;
+  }
+
+  public async fetchHistoricalCandles(
+    ticker: string,
+    interval: string = "1D",
+    count: number = 90,
+    force: boolean = false
+  ): Promise<OHLCVBar[] | null> {
+    const t = ticker.toUpperCase();
+    const iv = interval.toLowerCase();
+    return this.fetchWithTtl(
+      `candles:${t}:${iv}:${count}`,
+      30_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<any[]>("get_historical_prices", {
+          ticker: t,
+          count,
+          interval: iv,
+        });
+        const rows = Array.isArray(res.result) ? res.result : [];
+        if (rows.length === 0) return null;
+
+        // Backend returns most recent first; lightweight-charts requires strictly ascending chronological bars
+        const ascending = [...rows].reverse();
+        const seen = new Set<string | number>();
+        const bars: OHLCVBar[] = [];
+        for (const r of ascending) {
+          const tm: string | number = typeof r.date === "number" ? r.date : String(r.date).slice(0, 10);
+          if (seen.has(tm)) continue;
+          seen.add(tm);
+          bars.push({
+            time: tm,
+            open: Number(r.open),
+            high: Number(r.high),
+            low: Number(r.low),
+            close: Number(r.close),
+            volume: Number(r.volume ?? 0),
+          });
+        }
+        bars.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+        this.historicalCandles.set(`${t}:${iv}`, bars);
+        if (iv === "1d") {
+          this.historicalPrices.set(t, rows as HistoricalPriceRow[]);
+        }
+        this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+        return bars;
+      },
+      () => this.historicalCandles.get(`${t}:${iv}`) ?? null
+    );
+  }
+
+  public async fetchSecurityMaster(ticker: string, force: boolean = false): Promise<SecurityMasterData | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `sm:${t}`,
+      120_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<SecurityMasterData>("get_security_master", { ticker: t });
+        if (res.result && res.result.ticker) {
+          this.securityMasters.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.securityMasters.get(t) ?? null
+    );
+  }
+
+  public async fetchPeerGraph(ticker: string, force: boolean = false): Promise<PeerGraphData | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `pg:${t}`,
+      60_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<PeerGraphData>("get_peer_graph", { ticker: t });
+        if (res.result && Array.isArray(res.result.nodes)) {
+          this.peerGraphs.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.peerGraphs.get(t) ?? null
+    );
+  }
+
+  public async fetchEdgarFilings(ticker: string, force: boolean = false): Promise<EdgarFilingRedlineData | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `edgar:${t}`,
+      120_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<EdgarFilingRedlineData>("get_edgar_filings", { ticker: t });
+        if (res.result && Array.isArray(res.result.redlines)) {
+          this.edgarFilings.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.edgarFilings.get(t) ?? null
+    );
+  }
+
+  public async fetchNewsFeed(ticker: string, force: boolean = false): Promise<NewsItemData[] | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `news:${t}`,
+      60_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<NewsItemData[]>("get_news_feed", { ticker: t });
+        if (Array.isArray(res.result)) {
+          this.newsFeeds.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.newsFeeds.get(t) ?? null
+    );
+  }
+
+  public async fetchHistoricalPrices(ticker: string, count: number = 45, force: boolean = false): Promise<HistoricalPriceRow[] | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `hp:${t}:${count}`,
+      30_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<HistoricalPriceRow[]>("get_historical_prices", {
+          ticker: t,
+          count,
+          interval: "1d",
+        });
+        if (Array.isArray(res.result)) {
+          this.historicalPrices.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => {
+        const cached = this.historicalPrices.get(t);
+        return cached ? cached.slice(0, count) : null;
+      }
+    );
+  }
+
+  public async fetchAnalystRatings(ticker: string, force: boolean = false): Promise<AnalystRatingsData | null> {
+    const t = ticker.toUpperCase();
+    return this.fetchWithTtl(
+      `anr:${t}`,
+      120_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<AnalystRatingsData>("get_analyst_ratings", { ticker: t });
+        if (res.result && res.result.ticker) {
+          this.analystRatings.set(t, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.analystRatings.get(t) ?? null
+    );
+  }
+
+  public async fetchFinancials(
+    ticker: string,
+    pitStrict: boolean = true,
+    force: boolean = false
+  ): Promise<FinancialStatementsPayload | null> {
+    const t = ticker.toUpperCase();
+    const key = `${t}:${pitStrict ? "pit" : "restated"}`;
+    return this.fetchWithTtl(
+      `fin:${key}`,
+      120_000,
+      force,
+      async () => {
+        const res = await this.executeJsonRpc<FinancialStatementsPayload>("get_financials", {
+          ticker: t,
+          pit_strict: pitStrict,
+        });
+        if (res.result && res.result.ticker) {
+          this.financials.set(key, res.result);
+          this.emitFrame({ type: "CONFLATED_STREAM_FRAME", timestamp_ms: Date.now() });
+          return res.result;
+        }
+        return null;
+      },
+      () => this.financials.get(key) ?? null
+    );
+  }
+
+  public async refreshTickerContext(ticker: string, force: boolean = false): Promise<void> {
+    if (!this.isLiveConnected()) return;
+    const t = ticker.toUpperCase();
+    await Promise.all([
+      this.fetchSignal(t, force),
+      this.fetchTick(t, force),
+      this.fetchHistoricalCandles(t, "1D", 90, force),
+    ]);
+  }
+
+  public getSecurityMaster(ticker: string): SecurityMasterData | null {
+    return this.securityMasters.get(ticker.toUpperCase()) ?? null;
+  }
+
+  public getPeerGraph(ticker: string): PeerGraphData | null {
+    return this.peerGraphs.get(ticker.toUpperCase()) ?? null;
+  }
+
+  public getEdgarFilings(ticker: string): EdgarFilingRedlineData | null {
+    return this.edgarFilings.get(ticker.toUpperCase()) ?? null;
   }
 
   public getNewsFeed(ticker: string): NewsItemData[] {
-    return getNewsFeed(ticker);
+    return this.newsFeeds.get(ticker.toUpperCase()) ?? [];
   }
 
   public getHistoricalPrices(ticker: string, count: number = 30): HistoricalPriceRow[] {
-    return getHistoricalPrices(ticker, count);
+    const cached = this.historicalPrices.get(ticker.toUpperCase());
+    if (cached && cached.length > 0) {
+      return cached.slice(0, count);
+    }
+    return [];
   }
 
-  public getAnalystRatings(ticker: string): AnalystRatingsData {
-    return getAnalystRatings(ticker);
+  public getAnalystRatings(ticker: string): AnalystRatingsData | null {
+    return this.analystRatings.get(ticker.toUpperCase()) ?? null;
+  }
+
+  public getFinancials(ticker: string, pitStrict: boolean = true): FinancialStatementsPayload | null {
+    const key = `${ticker.toUpperCase()}:${pitStrict ? "pit" : "restated"}`;
+    return this.financials.get(key) ?? null;
   }
 
   public async queryCopilot(query: string, ticker: string = "NVDA"): Promise<CopilotQueryResponse> {
-    return queryCopilot(query, ticker);
+    const sym = ticker.toUpperCase();
+    if (this.isLiveConnected()) {
+      try {
+        const res = await this.executeJsonRpc<CopilotQueryResponse>("copilot_query", { query, ticker: sym });
+        if (res.result && res.result.answer) {
+          return res.result;
+        }
+        return {
+          answer: res.error?.message || `Engine daemon returned an empty response for ${sym}.`,
+          sources: [],
+          suggested_commands: [`${sym} QARE <GO>`, `${sym} FA <GO>`],
+          model: "QARE-MM Error",
+        };
+      } catch (err) {
+        return {
+          answer: `Copilot RPC failed while querying engine daemon: ${err instanceof Error ? err.message : String(err)}`,
+          sources: [],
+          suggested_commands: [`${sym} QARE <GO>`],
+          model: "QARE-MM Error",
+        };
+      }
+    }
+    return {
+      answer: "QARE-MM engine daemon is disconnected. Connect the live Python engine daemon on ws://127.0.0.1:8194 to run factual multi-modal research queries.",
+      sources: [],
+      suggested_commands: [`${sym} GP <GO>`, `${sym} FA <GO>`, `${sym} ANR <GO>`],
+      model: "Engine Offline",
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -598,18 +849,11 @@ export class IpcClientService {
     if (this.isTauriDesktop()) {
       return this.invokeTauri<ParquetQueryResult>("query_parquet", { sqlQuery });
     }
-    const rows: (string | number)[][] = [];
-    for (const [ticker, bars] of Object.entries(RECORDED_BARS).slice(0, 5)) {
-      if (bars.length > 0) {
-        const last = bars[bars.length - 1];
-        rows.push([ticker, last.time, last.open, last.high, last.low, last.close, last.volume]);
-      }
-    }
     return {
-      columns: ["ticker", "timestamp", "open", "high", "low", "close", "volume"],
-      rows,
-      row_count: rows.length,
-      execution_time_ms: 0.25,
+      columns: [],
+      rows: [],
+      row_count: 0,
+      execution_time_ms: 0,
     };
   }
 
@@ -618,16 +862,20 @@ export class IpcClientService {
       return this.invokeTauri<LakehouseStats>("get_lakehouse_stats");
     }
     return {
-      base_lakehouse_path: "amstal-engine/data",
-      exists: true,
-      processed_partitions_count: 250,
-      universe_snapshots_count: 10,
-      total_size_bytes: 52428800,
+      base_lakehouse_path: "N/A (Tauri desktop shell required)",
+      exists: false,
+      processed_partitions_count: 0,
+      universe_snapshots_count: 0,
+      total_size_bytes: 0,
     };
   }
 
   public destroy(): void {
     this.isDestroyed = true;
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

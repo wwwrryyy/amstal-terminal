@@ -31,12 +31,17 @@
   let maximizedSlot = $state<number | null>(null);
 
   // Reactive Color Channel Stores (PRD Section 3.4 & Architecture Section 3.3)
-  let channelTickers = $state<Record<ColorChannel, string>>({
+  let channelTickers = $state<Record<Exclude<ColorChannel, "UNLINKED">, string>>({
     BLUE: "NVDA",
     AMBER: "AAPL",
     GREEN: "MSFT",
     RED: "CRWD",
-    UNLINKED: "SPY",
+  });
+  let slotUnlinkedTickers = $state<Record<number, string>>({
+    0: "NVDA",
+    1: "CRWD",
+    2: "SPY",
+    3: "AAPL",
   });
 
   // Command history
@@ -53,10 +58,10 @@
 
   // Connection & Telemetry
   let connectionState = $state<ConnectionState>(ipcService.connectionState);
-  let latencyMs = $state<number>(ipcService.latencyMs);
-  let activeRegime = $state<MacroRegimeData>(ipcService.macroRegime);
-  let activeSignal = $state<QARESignalFrame>(ipcService.getSignal("NVDA"));
-  let activeTick = $state<TickData>(ipcService.getTick("NVDA"));
+  let latencyMs = $state<number | null>(ipcService.latencyMs);
+  let activeRegime = $state<MacroRegimeData | null>(ipcService.getMacroRegime());
+  let activeSignal = $state<QARESignalFrame | null>(ipcService.getSignal("NVDA"));
+  let activeTick = $state<TickData | null>(ipcService.getTick("NVDA"));
 
   // Modals & Popovers
   let showHelpModal = $state(false);
@@ -75,14 +80,16 @@
 
   function getSlotTicker(slotIdx: number): string {
     const ch = slotChannels[slotIdx];
-    if (ch === "UNLINKED") return activeTicker;
+    if (ch === "UNLINKED") return slotUnlinkedTickers[slotIdx] || activeTicker;
     return channelTickers[ch] || activeTicker;
   }
 
   function setSlotTicker(slotIdx: number, newTicker: string) {
     const ch = slotChannels[slotIdx];
     const upper = newTicker.toUpperCase();
-    if (ch !== "UNLINKED") {
+    if (ch === "UNLINKED") {
+      slotUnlinkedTickers[slotIdx] = upper;
+    } else {
       channelTickers[ch] = upper;
     }
     activeTicker = upper;
@@ -97,32 +104,24 @@
 
     unsubscribeStatus = ipcService.subscribeStatus((state) => {
       connectionState = state;
+      if (state !== "CONNECTED") {
+        latencyMs = null;
+      }
     });
 
     unsubscribeIpc = ipcService.subscribe((frame) => {
+      latencyMs = ipcService.latencyMs;
       if (frame.macro_regime) {
-        const newReg = frame.macro_regime;
-        if (
-          newReg.current_state !== activeRegime.current_state ||
-          Math.abs((newReg.filtered_probabilities?.low_volatility ?? 0) - (activeRegime.filtered_probabilities?.low_volatility ?? 0)) >= 0.005
-        ) {
-          activeRegime = newReg;
-        }
+        activeRegime = frame.macro_regime;
+      } else {
+        activeRegime = ipcService.getMacroRegime();
       }
       const sym = activeTicker.toUpperCase();
       if (frame.signals && frame.signals[sym]) {
-        const newSig = frame.signals[sym];
-        const oldPrice = activeSignal.execution_recommendation.entry_price;
-        const newPrice = newSig.execution_recommendation.entry_price;
-        if (Math.abs(newPrice - oldPrice) >= 0.01 || newSig.execution_recommendation.action !== activeSignal.execution_recommendation.action) {
-          activeSignal = newSig;
-        }
+        activeSignal = frame.signals[sym];
       }
       if (frame.ticks && frame.ticks[sym]) {
-        const newTick = frame.ticks[sym];
-        if (newTick.price !== activeTick.price || newTick.change !== activeTick.change) {
-          activeTick = newTick;
-        }
+        activeTick = frame.ticks[sym];
       }
     });
 
@@ -137,9 +136,15 @@
   });
 
   $effect(() => {
-    if (activeTicker) {
-      activeSignal = ipcService.getSignal(activeTicker);
-      activeTick = ipcService.getTick(activeTicker);
+    const sym = activeTicker;
+    const st = connectionState;
+    if (sym) {
+      activeRegime = ipcService.getMacroRegime();
+      activeSignal = ipcService.getSignal(sym);
+      activeTick = ipcService.getTick(sym);
+      if (st === "CONNECTED") {
+        ipcService.refreshTickerContext(sym);
+      }
     }
   });
 
@@ -273,6 +278,9 @@
 
   // Active regime formatting
   let regimeStateColor = $derived.by(() => {
+    if (!activeRegime || activeRegime.available === false) {
+      return "text-[#8B98A5] bg-[#06090F] border-[#172033]";
+    }
     const s = activeRegime.current_state;
     if (s === "LOW_VOLATILITY") return "text-[#00E676] bg-[#00E676]/10 border-[#00E676]/40";
     if (s === "MEDIUM_VOLATILITY") return "text-[#FF9E00] bg-[#FF9E00]/10 border-[#FF9E00]/40";
@@ -280,12 +288,17 @@
   });
 
   let regimeProbPct = $derived.by(() => {
+    if (!activeRegime || activeRegime.available === false) return null;
     const s = activeRegime.current_state;
     const p = activeRegime.filtered_probabilities;
-    if (!p) return 80;
-    if (s === "LOW_VOLATILITY") return Math.round(p.low_volatility * 100);
-    if (s === "MEDIUM_VOLATILITY") return Math.round(p.medium_volatility * 100);
-    return Math.round(p.high_volatility * 100);
+    if (!p) return null;
+    const v =
+      s === "LOW_VOLATILITY"
+        ? p.low_volatility
+        : s === "MEDIUM_VOLATILITY"
+          ? p.medium_volatility
+          : p.high_volatility;
+    return typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) : null;
   });
 </script>
 
@@ -312,12 +325,12 @@
         ></span>
         <span class="font-medium text-[#8B98A5]">
           {connectionState === "CONNECTED"
-            ? (marketOpen ? "LIVE" : "CLOSED")
+            ? (marketOpen ? "LIVE" : "MKT CLOSED")
             : connectionState === "CONNECTING"
               ? "CONNECTING"
-              : (!marketOpen ? "CLOSED" : "DISCONNECTED")}
+              : "OFFLINE"}
         </span>
-        <span class="text-[#475569]">[{latencyMs}ms]</span>
+        <span class="text-[#475569]">[{latencyMs !== null ? `${latencyMs}ms` : "—"}]</span>
       </div>
     </div>
 
@@ -352,12 +365,17 @@
       <!-- Active Security Pill -->
       <div class="flex items-center gap-1.5 px-2 py-0.5 bg-[#06090F] border border-[#172033] rounded text-2xs">
         <span class="font-bold text-[#FFB000]">{activeTicker}</span>
-        <span class="text-[#E2E8F0] font-mono">${activeTick.price.toFixed(2)}</span>
-        <span class="font-mono {activeTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
-          {activeTick.change >= 0 ? "+" : ""}{activeTick.change_pct.toFixed(2)}%
-        </span>
+        {#if activeTick && activeTick.price > 0}
+          <span class="text-[#E2E8F0] font-mono">${activeTick.price.toFixed(2)}</span>
+          <span class="font-mono {activeTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+            {activeTick.change >= 0 ? "+" : ""}{activeTick.change_pct.toFixed(2)}%
+          </span>
+        {:else}
+          <span class="text-[#5E6D82] font-mono">$—</span>
+          <span class="text-[#5E6D82] font-mono">{connectionState === "CONNECTED" ? "…" : "OFFLINE"}</span>
+        {/if}
         {#if !marketOpen}
-          <span class="text-3xs text-[#7A8B9E] font-bold px-1 bg-[#151D2E] rounded border border-[#23314B]" title="Official Friday closing bell session">
+          <span class="text-3xs text-[#7A8B9E] font-bold px-1 bg-[#151D2E] rounded border border-[#23314B]" title="Market session outside regular US trading hours">
             CLOSED
           </span>
         {/if}
@@ -369,8 +387,14 @@
         title="Forward-Filtered Active Regime Posterior Probability P(S_t). (See HMM panel for margin over runner-up state)"
       >
         <span class="text-[#5E6D82]">REGIME:</span>
-        <span class="font-bold">{activeRegime.current_state.replace('_VOLATILITY', '')}</span>
-        <span class="font-mono text-3xs">(P={regimeProbPct}%)</span>
+        {#if activeRegime && activeRegime.available !== false}
+          <span class="font-bold">{activeRegime.current_state.replace("_VOLATILITY", "")}</span>
+          {#if regimeProbPct !== null}
+            <span class="font-mono text-3xs">(P={regimeProbPct}%)</span>
+          {/if}
+        {:else}
+          <span class="font-bold text-[#5E6D82]">{connectionState === "CONNECTED" ? "UNAVAILABLE" : "OFFLINE"}</span>
+        {/if}
       </div>
 
       <!-- Live UTC Clock -->
@@ -636,7 +660,11 @@
 
     <!-- Center: Telemetry Status -->
     <div class="hidden md:flex items-center gap-3 font-mono">
-      <span>FEED: <strong class="text-[#00FF66]">{connectionState === "CONNECTED" ? "100ms CONFLATION" : "250ms CONFLATION"}</strong></span>
+      <span>
+        FEED: <strong class={connectionState === "CONNECTED" ? "text-[#00FF66]" : connectionState === "CONNECTING" ? "text-[#FFB000]" : "text-[#FF3344]"}>
+          {connectionState === "CONNECTED" ? "100ms CONFLATION" : connectionState === "CONNECTING" ? "CONNECTING" : "OFFLINE (NO LIVE FEED)"}
+        </strong>
+      </span>
       <span class="text-[#232F48]">|</span>
       <span>IPC: <strong class="text-[#8B98A5]">/tmp/amstal.sock</strong></span>
       <span class="text-[#232F48]">|</span>

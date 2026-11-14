@@ -20,5 +20,12 @@ export default defineConfig({
     target: platform === "windows" ? "chrome105" : "safari15",
     minify: !isDebug ? "esbuild" : false,
     sourcemap: isDebug,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          charts: ["lightweight-charts"],
+        },
+      },
+    },
   },
 });

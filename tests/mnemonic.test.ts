@@ -121,4 +121,16 @@ describe("Bloomberg RPN Mnemonic Command Parser", () => {
     const resSpaces = parse_mnemonic_command("   ");
     expect(resSpaces.is_valid).toBe(false);
   });
+
+  it("keeps identifier empty on standalone mnemonics and preserves extra params", () => {
+    const resHmm = parse_mnemonic_command("HMM <GO>");
+    expect(resHmm.is_valid).toBe(true);
+    expect(resHmm.identifier).toBe("");
+    expect(resHmm.mnemonic).toBe("HMM");
+
+    const resMulti = parse_mnemonic_command("NVDA FA 1D <GO>");
+    expect(resMulti.identifier).toBe("NVDA");
+    expect(resMulti.mnemonic).toBe("FA");
+    expect(resMulti.parameters.args).toEqual(["1D"]);
+  });
 });

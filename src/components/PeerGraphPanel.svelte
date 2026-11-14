@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import { ipcService } from "../lib/ipc";
   import type { ColorChannel, PeerGraphData, PeerGraphNode } from "../lib/types";
 
@@ -20,8 +21,50 @@
     onSwitchFunction?: (mnemonic: string) => void;
   } = $props();
 
-  let graph = $derived<PeerGraphData>(ipcService.getPeerGraph(ticker));
+  let graph = $state<PeerGraphData | null>(ipcService.getPeerGraph("NVDA"));
   let selectedNodeId = $state<string | null>(null);
+  let connState = $state<string>(ipcService.connectionState);
+  let isLoading = $state<boolean>(false);
+  let unsubscribeStatus: (() => void) | null = null;
+  let unsubscribeIpc: (() => void) | null = null;
+
+  $effect(() => {
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      const cached = ipcService.getPeerGraph(sym);
+      graph = cached;
+      selectedNodeId = null;
+      if (connected) {
+        if (!cached) isLoading = true;
+        ipcService
+          .fetchPeerGraph(sym)
+          .then((fresh) => {
+            if (fresh && sym === ticker) graph = fresh;
+          })
+          .finally(() => {
+            if (sym === ticker) isLoading = false;
+          });
+      } else {
+        isLoading = false;
+      }
+    }
+  });
+
+  onMount(() => {
+    unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      connState = st;
+    });
+    unsubscribeIpc = ipcService.subscribe(() => {
+      const updated = ipcService.getPeerGraph(ticker);
+      if (updated) graph = updated;
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubscribeStatus) unsubscribeStatus();
+    if (unsubscribeIpc) unsubscribeIpc();
+  });
 
   const channelColors: Record<ColorChannel, { bg: string; text: string; border: string }> = {
     BLUE: { bg: "bg-[#00D2FF]/20", text: "text-[#00D2FF]", border: "border-[#00D2FF]/40" },
@@ -65,7 +108,7 @@
   };
 
   let selectedNode = $derived<PeerGraphNode | null>(
-    selectedNodeId ? graph.nodes.find((n) => n.id === selectedNodeId) || null : null
+    selectedNodeId && graph ? graph.nodes.find((n) => n.id === selectedNodeId) || null : null
   );
 
   function handleNodeClick(nodeId: string) {
@@ -119,8 +162,16 @@
       <!-- Top Metrics Banner inside canvas -->
       <div class="flex items-center justify-between px-3 py-1 bg-[#090D16] border-b border-[#172033] text-2xs font-mono">
         <div class="flex items-center gap-3">
-          <span>GAT ENTROPY: <strong class="text-[#00D2FF]">{graph.gat_attention_entropy?.toFixed(2) ?? '1.84'}</strong></span>
-          <span>SPILLOVER LEADER: <strong class="text-[#00FF66]">{graph.top_spillover_contributor ?? 'TSM'}</strong></span>
+          <span>
+            GAT ENTROPY: <strong class="text-[#00D2FF]">
+              {graph?.gat_attention_entropy !== undefined && graph?.gat_attention_entropy !== null
+                ? graph.gat_attention_entropy.toFixed(2)
+                : "—"}
+            </strong>
+          </span>
+          <span>
+            SPILLOVER LEADER: <strong class="text-[#00FF66]">{graph?.top_spillover_contributor || "—"}</strong>
+          </span>
         </div>
         <div class="flex items-center gap-2">
           <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#FFB000]"></span>Target</span>
@@ -132,6 +183,16 @@
 
       <!-- Interactive SVG Graph -->
       <div class="flex-1 flex items-center justify-center p-2">
+        {#if !graph || graph.nodes.length === 0}
+          <div class="text-center font-mono px-4">
+            <div class="text-xs font-bold {isLoading ? 'text-[#00D2FF]' : 'text-[#FFB000]'}">
+              {isLoading ? `BUILDING PEER SUBGRAPH FOR ${ticker}…` : connState === "CONNECTED" ? `NO PEER GRAPH NODES FOR ${ticker}` : "ENGINE DAEMON OFFLINE — NO SIMULATED PEER GRAPH"}
+            </div>
+            <div class="text-2xs text-[#5E6D82] mt-1">
+              Connect the live QARE-MM Python daemon on ws://127.0.0.1:8194 to inspect 60d GICS &amp; lead-lag spillover attention.
+            </div>
+          </div>
+        {:else}
         <svg viewBox="0 0 500 320" class="w-full h-full max-h-[360px] select-none font-mono">
           <defs>
             <!-- Arrow markers for lead-lag spillover direction -->
@@ -147,9 +208,9 @@
           {#each graph.edges as edge}
             {@const srcNodeIdx = graph.nodes.findIndex((n) => n.id === edge.source)}
             {@const tgtNodeIdx = graph.nodes.findIndex((n) => n.id === edge.target)}
-            {@const srcPos = nodePositions[srcNodeIdx !== -1 ? srcNodeIdx : 0]}
-            {@const tgtPos = nodePositions[tgtNodeIdx !== -1 ? tgtNodeIdx : 0]}
-            {@const isLeadLag = edge.lead_days !== undefined}
+            {@const srcPos = nodePositions[srcNodeIdx !== -1 ? srcNodeIdx : 0] || { x: 250, y: 160 }}
+            {@const tgtPos = nodePositions[tgtNodeIdx !== -1 ? tgtNodeIdx : 0] || { x: 250, y: 160 }}
+            {@const isLeadLag = edge.lead_days !== undefined && edge.lead_days !== null}
             {@const isSelected = selectedNodeId && (edge.source === selectedNodeId || edge.target === selectedNodeId)}
 
             <line
@@ -203,7 +264,6 @@
               aria-label={`Inspect ${node.label} (${node.role})`}
               class="cursor-pointer transition-transform hover:scale-110 focus:outline-none"
             >
-              <!-- Outer halo ring on selected -->
               {#if isSelected}
                 <circle
                   cx={pos.x}
@@ -216,7 +276,6 @@
                 />
               {/if}
 
-              <!-- Node Body -->
               <circle
                 cx={pos.x}
                 cy={pos.y}
@@ -226,7 +285,6 @@
                 stroke-width={isTarget ? 3 : 2}
               />
 
-              <!-- Node Center Dot -->
               <circle
                 cx={pos.x}
                 cy={pos.y}
@@ -235,7 +293,6 @@
                 opacity="0.25"
               />
 
-              <!-- Ticker Text -->
               <text
                 x={pos.x}
                 y={pos.y + 4}
@@ -249,6 +306,7 @@
             </g>
           {/each}
         </svg>
+        {/if}
       </div>
     </div>
 
@@ -273,15 +331,21 @@
                 <span>ROLE CODE:</span>
                 <span class="text-[#E6EDF5]">{selectedNode.role_code}</span>
               </div>
-              {#if selectedNode.cross_corr_5d !== undefined}
+              {#if selectedNode.cross_corr_5d !== undefined && selectedNode.cross_corr_5d !== null}
                 <div class="flex justify-between text-[#5E6D82]">
                   <span>5D LEAD-LAG CORR:</span>
-                  <span class="text-[#00FF66] font-bold">+{selectedNode.cross_corr_5d.toFixed(2)}</span>
+                  <span class="{selectedNode.cross_corr_5d >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'} font-bold">
+                    {selectedNode.cross_corr_5d >= 0 ? "+" : ""}{selectedNode.cross_corr_5d.toFixed(2)}
+                  </span>
                 </div>
               {/if}
               <div class="flex justify-between text-[#5E6D82]">
-                <span>MARKET BETA:</span>
-                <span class="text-[#00D2FF]">{selectedNode.beta_market?.toFixed(2) ?? '1.15'}</span>
+                <span>MARKET BETA (60D):</span>
+                <span class="text-[#00D2FF]">
+                  {selectedNode.beta_market !== null && selectedNode.beta_market !== undefined
+                    ? selectedNode.beta_market.toFixed(2)
+                    : "N/A"}
+                </span>
               </div>
             </div>
 

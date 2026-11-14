@@ -12,7 +12,6 @@
     type Time,
   } from "lightweight-charts";
   import { ipcService } from "../lib/ipc";
-  import { generateHistoricalCandles } from "../lib/data_lake";
   import type { ColorChannel, OHLCVBar, QARESignalFrame, TickData } from "../lib/types";
 
   let {
@@ -72,9 +71,18 @@
   } | null>(null);
 
   // Active signal & tick
-  let currentSignal = $state<QARESignalFrame>(ipcService.getSignal("NVDA"));
-  let currentTick = $state<TickData>(ipcService.getTick("NVDA"));
+  let currentSignal = $state<QARESignalFrame | null>(ipcService.getSignal("NVDA"));
+  let currentTick = $state<TickData | null>(ipcService.getTick("NVDA"));
   let connState = $state<string>(ipcService.connectionState);
+  let isLoading = $state<boolean>(false);
+
+  function formatHoverVolume(vol: number | undefined): string {
+    if (vol === undefined || !Number.isFinite(vol) || vol <= 0) return "—";
+    if (vol >= 1_000_000_000) return `${(vol / 1_000_000_000).toFixed(2)}B`;
+    if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(2)}M`;
+    if (vol >= 1_000) return `${(vol / 1_000).toFixed(1)}K`;
+    return String(Math.round(vol));
+  }
 
   let resizeObserver: ResizeObserver | null = null;
   let unsubscribeIpc: (() => void) | null = null;
@@ -153,15 +161,17 @@
           const rec = currentSignal.execution_recommendation;
           const tp = rec.dynamic_take_profit;
           const sl = rec.dynamic_stop_loss;
-          const maxP = Math.max(res?.priceRange?.maxValue ?? 0, tp * 1.02);
-          const minP = Math.min(res?.priceRange?.minValue ?? Infinity, sl * 0.98);
-          return {
-            priceRange: {
-              minValue: minP,
-              maxValue: maxP,
-            },
-            margins: res?.margins,
-          };
+          if (tp > 0 && sl > 0 && tp > sl && res?.priceRange) {
+            const maxP = Math.max(res.priceRange.maxValue, tp * 1.015);
+            const minP = Math.min(res.priceRange.minValue, sl * 0.985);
+            return {
+              priceRange: {
+                minValue: minP,
+                maxValue: maxP,
+              },
+              margins: res?.margins,
+            };
+          }
         }
         return res;
       },
@@ -192,12 +202,19 @@
       }
       const candle = param.seriesData.get(candleSeries) as any;
       if (candle) {
-        const timeStr = String(param.time);
+        const volEntry = volumeSeries ? (param.seriesData.get(volumeSeries) as any) : undefined;
+        const barMatch = bars.find((b) => b.time === param.time);
+        const volVal = typeof volEntry?.value === "number" ? volEntry.value : barMatch?.volume;
+        const timeStr =
+          typeof param.time === "number"
+            ? new Date(param.time * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC"
+            : String(param.time);
         if (
           !hoverData ||
           hoverData.time !== timeStr ||
           hoverData.close !== candle.close ||
-          hoverData.open !== candle.open
+          hoverData.open !== candle.open ||
+          hoverData.volume !== volVal
         ) {
           hoverData = {
             time: timeStr,
@@ -205,6 +222,7 @@
             high: candle.high,
             low: candle.low,
             close: candle.close,
+            volume: volVal,
           };
         }
       }
@@ -225,10 +243,55 @@
     resizeObserver.observe(chartContainer);
   }
 
-  function loadData() {
-    if (!candleSeries || !volumeSeries || !chart) return;
+  let activeLoadKey = "";
 
-    bars = generateHistoricalCandles(ticker, timeframe === "1D" ? 60 : 90);
+  function mergeLiveTickIntoBars(targetBars: OHLCVBar[], tick: TickData | null, tf: "1H" | "4H" | "1D"): OHLCVBar[] {
+    if (targetBars.length === 0 || !tick || tick.price <= 0) return targetBars;
+    const out = targetBars.map((b) => ({ ...b }));
+    const last = out[out.length - 1];
+
+    if (tf === "1D" && typeof last.time === "string") {
+      const tickDate = tick.date || new Date(tick.timestamp_ms || Date.now()).toISOString().slice(0, 10);
+      if (tickDate > last.time) {
+        out.push({
+          time: tickDate,
+          open: tick.open ?? last.close,
+          high: Math.max(tick.high ?? tick.price, tick.price, tick.open ?? tick.price),
+          low: Math.min(tick.low ?? tick.price, tick.price, tick.open ?? tick.price),
+          close: tick.price,
+          volume: tick.volume ?? 0,
+        });
+      } else if (tickDate === last.time) {
+        last.high = Math.max(last.high, tick.price, tick.high ?? tick.price);
+        last.low = Math.min(last.low, tick.price, tick.low ?? tick.price);
+        last.close = tick.price;
+        if (tick.volume > 0) last.volume = Math.max(last.volume, tick.volume);
+      }
+    } else if (tf !== "1D" && typeof last.time === "number") {
+      const bucketWidth = tf === "4H" ? 14400 : 3600;
+      const tickSec = Math.floor((tick.timestamp_ms || Date.now()) / 1000);
+      const bucket = bucketWidth * Math.floor(tickSec / bucketWidth);
+      if (bucket > last.time) {
+        out.push({
+          time: bucket,
+          open: last.close,
+          high: tick.price,
+          low: tick.price,
+          close: tick.price,
+          volume: tick.volume ?? 0,
+        });
+      } else if (bucket === last.time) {
+        last.high = Math.max(last.high, tick.price);
+        last.low = Math.min(last.low, tick.price);
+        last.close = tick.price;
+      }
+    }
+    return out;
+  }
+
+  function applyBarsToSeries(newBars: OHLCVBar[]) {
+    if (!candleSeries || !volumeSeries || !chart) return;
+    bars = mergeLiveTickIntoBars(newBars, currentTick, timeframe);
 
     if (bars.length === 0) {
       candleSeries.setData([]);
@@ -262,20 +325,68 @@
     chart.timeScale().fitContent();
   }
 
+  function loadData() {
+    if (!candleSeries || !volumeSeries || !chart) return;
+    const count = 90;
+    const reqKey = `${ticker.toUpperCase()}:${timeframe}`;
+    activeLoadKey = reqKey;
+
+    const cachedLive = ipcService.getCachedHistoricalCandles(ticker, timeframe);
+    if (cachedLive && cachedLive.length > 0) {
+      isLoading = false;
+      applyBarsToSeries(cachedLive);
+    } else {
+      applyBarsToSeries([]);
+    }
+
+    if (ipcService.connectionState === "CONNECTED") {
+      if (!cachedLive || cachedLive.length === 0) {
+        isLoading = true;
+      }
+      ipcService
+        .fetchHistoricalCandles(ticker, timeframe, count)
+        .then((liveBars) => {
+          if (liveBars && liveBars.length > 0 && activeLoadKey === reqKey) {
+            applyBarsToSeries(liveBars);
+          }
+        })
+        .finally(() => {
+          if (activeLoadKey === reqKey) {
+            isLoading = false;
+          }
+        });
+    } else {
+      isLoading = false;
+    }
+  }
+
   let lastTpPrice = -1;
   let lastSlPrice = -1;
   let lastEntryPrice = -1;
   let lastMarkerTime: Time | null = null;
   let rafId: number | null = null;
-  let pendingCandleUpdate: { time: Time; open: number; high: number; low: number; close: number } | null = null;
+  let pendingCandleUpdate: {
+    candle: { time: Time; open: number; high: number; low: number; close: number };
+    volume?: { time: Time; value: number; color: string };
+  } | null = null;
 
-  function scheduleCandleUpdate(candle: { time: Time; open: number; high: number; low: number; close: number }) {
-    pendingCandleUpdate = candle;
+  function scheduleCandleUpdate(
+    candle: { time: Time; open: number; high: number; low: number; close: number },
+    volume?: { time: Time; value: number; color: string }
+  ) {
+    pendingCandleUpdate = { candle, volume };
     if (rafId === null) {
       rafId = requestAnimationFrame(() => {
         rafId = null;
         if (candleSeries && pendingCandleUpdate) {
-          candleSeries.update(pendingCandleUpdate);
+          try {
+            candleSeries.update(pendingCandleUpdate.candle);
+            if (showVolume && volumeSeries && pendingCandleUpdate.volume) {
+              volumeSeries.update(pendingCandleUpdate.volume);
+            }
+          } catch {
+            // Ignore monotonic mismatch if series reloaded mid-frame
+          }
           pendingCandleUpdate = null;
         }
       });
@@ -306,15 +417,22 @@
   function renderTripleBarriers() {
     if (!candleSeries) return;
 
-    if (!showBarriers || bars.length === 0) {
+    const rec = currentSignal?.execution_recommendation;
+    if (
+      !showBarriers ||
+      bars.length === 0 ||
+      !rec ||
+      !(rec.entry_price > 0) ||
+      !(rec.dynamic_take_profit > 0) ||
+      !(rec.dynamic_stop_loss > 0)
+    ) {
       clearBarriers();
       return;
     }
 
-    const rec = currentSignal.execution_recommendation;
-    const entryPrice = rec.entry_price || bars[bars.length - 1].close;
-    const tpPrice = rec.dynamic_take_profit || +(entryPrice * 1.07).toFixed(2);
-    const slPrice = rec.dynamic_stop_loss || +(entryPrice * 0.965).toFixed(2);
+    const entryPrice = rec.entry_price;
+    const tpPrice = rec.dynamic_take_profit;
+    const slPrice = rec.dynamic_stop_loss;
 
     // 1. Take Profit Barrier (Horizontal Upper) - reuse or update
     if (!tpLine) {
@@ -391,12 +509,18 @@
     }
   }
 
-  // Effect to react to ticker changes
+  // Effect to react to ticker & connection changes
   $effect(() => {
-    if (ticker) {
-      currentSignal = ipcService.getSignal(ticker);
-      currentTick = ipcService.getTick(ticker);
+    const sym = ticker;
+    const connected = connState === "CONNECTED";
+    if (sym) {
+      currentSignal = ipcService.getSignal(sym);
+      currentTick = ipcService.getTick(sym);
       loadData();
+      if (connected) {
+        ipcService.fetchSignal(sym);
+        ipcService.fetchTick(sym);
+      }
     }
   });
 
@@ -407,38 +531,57 @@
       const sym = ticker.toUpperCase();
       if (frame.ticks && frame.ticks[sym]) {
         const newTick = frame.ticks[sym];
-        if (newTick.price !== currentTick.price) {
-          currentTick = newTick;
-          // Update the last candle with live tick throttled to RAF
-          if (candleSeries && bars.length > 0) {
-            const last = bars[bars.length - 1];
-            const newPrice = currentTick.price;
-            last.high = Math.max(last.high, newPrice);
-            last.low = Math.min(last.low, newPrice);
-            last.close = newPrice;
-            scheduleCandleUpdate({
-              time: last.time as Time,
-              open: last.open,
-              high: last.high,
-              low: last.low,
-              close: last.close,
-            });
+        currentTick = newTick;
+        if (candleSeries && bars.length > 0 && newTick.price > 0) {
+          const prevLen = bars.length;
+          const prevLastTime = bars[bars.length - 1].time;
+          bars = mergeLiveTickIntoBars(bars, newTick, timeframe);
+          const updatedLast = bars[bars.length - 1];
+          const appended = bars.length > prevLen || updatedLast.time !== prevLastTime;
+          if (appended || updatedLast.time === prevLastTime) {
+            scheduleCandleUpdate(
+              {
+                time: updatedLast.time as Time,
+                open: updatedLast.open,
+                high: updatedLast.high,
+                low: updatedLast.low,
+                close: updatedLast.close,
+              },
+              {
+                time: updatedLast.time as Time,
+                value: updatedLast.volume ?? 0,
+                color: updatedLast.close >= updatedLast.open ? "rgba(0, 230, 118, 0.25)" : "rgba(255, 51, 102, 0.25)",
+              }
+            );
+            if (appended) {
+              renderTripleBarriers();
+            }
+          }
+        }
+      } else {
+        // Re-check cached live bars after hydrateFromLiveEngine / fetchHistoricalCandles
+        const cachedLive = ipcService.getCachedHistoricalCandles(sym, timeframe);
+        if (cachedLive && cachedLive.length > 0) {
+          const cachedLast = cachedLive[cachedLive.length - 1].time;
+          const currentLast = bars.length > 0 ? bars[bars.length - 1].time : null;
+          if (cachedLast !== currentLast || cachedLive.length !== bars.length) {
+            isLoading = false;
+            applyBarsToSeries(cachedLive);
           }
         }
       }
       if (frame.signals && frame.signals[sym]) {
-        const newSig = frame.signals[sym];
-        const oldEntry = currentSignal.execution_recommendation.entry_price;
-        const newEntry = newSig.execution_recommendation.entry_price;
-        if (Math.abs(newEntry - oldEntry) >= 0.01 || newSig.execution_recommendation.action !== currentSignal.execution_recommendation.action) {
-          currentSignal = newSig;
-          renderTripleBarriers();
-        }
+        currentSignal = frame.signals[sym];
+        renderTripleBarriers();
       }
     });
 
     unsubscribeStatus = ipcService.subscribeStatus((st) => {
+      const prev = connState;
       connState = st;
+      if (st === "CONNECTED" && prev !== "CONNECTED") {
+        loadData();
+      }
     });
   });
 
@@ -499,12 +642,16 @@
       <span class="text-[#E6EDF5] font-semibold">{ticker} US</span>
 
       <!-- Live Tick Pill -->
-      <span class="ml-2 font-mono font-bold {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
-        ${currentTick.price.toFixed(2)}
-      </span>
-      <span class="text-2xs font-mono {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
-        {currentTick.change >= 0 ? "+" : ""}{currentTick.change.toFixed(2)} ({currentTick.change_pct >= 0 ? "+" : ""}{currentTick.change_pct.toFixed(2)}%)
-      </span>
+      {#if currentTick && currentTick.price > 0}
+        <span class="ml-2 font-mono font-bold {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+          ${currentTick.price.toFixed(2)}
+        </span>
+        <span class="text-2xs font-mono {currentTick.change >= 0 ? 'text-[#00FF66]' : 'text-[#FF3344]'}">
+          {currentTick.change >= 0 ? "+" : ""}{currentTick.change.toFixed(2)} ({currentTick.change_pct >= 0 ? "+" : ""}{currentTick.change_pct.toFixed(2)}%)
+        </span>
+      {:else}
+        <span class="ml-2 font-mono text-[#5E6D82]">$—</span>
+      {/if}
     </div>
 
     <!-- Controls -->
@@ -561,25 +708,32 @@
   <!-- Metric Badges Bar (Single-line, non-wrapping compact layout) -->
   <div class="flex items-center justify-between px-2.5 py-1 bg-[#0C111B] border-b border-[#172033] text-3xs font-mono overflow-hidden">
     <div class="flex items-center gap-2.5 text-[#8B98A5] whitespace-nowrap shrink-0">
-      <div title="Take Profit Barrier: +2.0 ATR">
-        <span class="text-[#5E6D82]">TP:</span>
-        <span class="text-[#00FF66] font-bold">${currentSignal.execution_recommendation.dynamic_take_profit.toFixed(2)}</span>
-      </div>
-      <div>
-        <span class="text-[#5E6D82]">ENTRY:</span>
-        <span class="text-[#00D2FF] font-bold">${currentSignal.execution_recommendation.entry_price.toFixed(2)}</span>
-      </div>
-      <div title="Stop Loss Barrier: -1.0 ATR">
-        <span class="text-[#5E6D82]">SL:</span>
-        <span class="text-[#FF3344] font-bold">${currentSignal.execution_recommendation.dynamic_stop_loss.toFixed(2)}</span>
-      </div>
-      <div>
-        <span class="text-[#5E6D82]">R:R:</span>
-        <span class="text-[#FFB000] font-bold">{currentSignal.execution_recommendation.reward_to_risk_ratio.toFixed(1)}x</span>
-      </div>
+      {#if currentSignal?.execution_recommendation && currentSignal.execution_recommendation.dynamic_take_profit > 0}
+        <div title="Take Profit Barrier: +2.0 ATR">
+          <span class="text-[#5E6D82]">TP:</span>
+          <span class="text-[#00FF66] font-bold">${currentSignal.execution_recommendation.dynamic_take_profit.toFixed(2)}</span>
+        </div>
+        <div>
+          <span class="text-[#5E6D82]">ENTRY:</span>
+          <span class="text-[#00D2FF] font-bold">${currentSignal.execution_recommendation.entry_price.toFixed(2)}</span>
+        </div>
+        <div title="Stop Loss Barrier: -1.0 ATR">
+          <span class="text-[#5E6D82]">SL:</span>
+          <span class="text-[#FF3344] font-bold">${currentSignal.execution_recommendation.dynamic_stop_loss.toFixed(2)}</span>
+        </div>
+        <div>
+          <span class="text-[#5E6D82]">R:R:</span>
+          <span class="text-[#FFB000] font-bold">{currentSignal.execution_recommendation.reward_to_risk_ratio.toFixed(1)}x</span>
+        </div>
+      {:else}
+        <div title="Triple barriers suppressed while engine offline or model not ready">
+          <span class="text-[#5E6D82]">BARRIERS:</span>
+          <span class="text-[#FFB000] font-bold">{currentSignal ? "UNSET (HOLD)" : "OFFLINE"}</span>
+        </div>
+      {/if}
       <div title="Vertical time horizon barrier (+10 trading days in future)">
         <span class="text-[#5E6D82]">HORIZON:</span>
-        <span class="text-[#E6EDF5] font-bold">+{currentSignal.horizon_days}D (T_10)</span>
+        <span class="text-[#E6EDF5] font-bold">+{currentSignal?.horizon_days ?? 10}D (T_10)</span>
       </div>
     </div>
 
@@ -591,10 +745,11 @@
         <span>H:<strong class="text-[#00FF66]">${hoverData.high.toFixed(2)}</strong></span>
         <span>L:<strong class="text-[#FF3344]">${hoverData.low.toFixed(2)}</strong></span>
         <span>C:<strong class="text-[#00D2FF]">${hoverData.close.toFixed(2)}</strong></span>
+        <span>V:<strong class="text-[#E6EDF5]">{formatHoverVolume(hoverData.volume)}</strong></span>
       </div>
     {:else}
       <div class="text-[#5E6D82] text-3xs whitespace-nowrap hidden sm:block">
-        {connState === "CONNECTED" ? "LIVE FEED" : "RECORDED LAKEHOUSE"} &bull; TRIPLE BARRIER METHOD
+        {connState === "CONNECTED" ? "LIVE LAKEHOUSE" : "ENGINE OFFLINE — NO SIMULATED FEED"} &bull; TRIPLE BARRIER METHOD
       </div>
     {/if}
   </div>
@@ -603,9 +758,17 @@
   <div class="flex-1 relative w-full h-full min-h-[180px] bg-[#06090F]">
     <div bind:this={chartContainer} class="absolute inset-0 w-full h-full"></div>
     {#if bars.length === 0}
-      <div class="absolute inset-0 flex flex-col items-center justify-center bg-[#06090F]/90 text-[#8B98A5] font-mono z-10 pointer-events-none">
-        <span class="text-sm font-semibold text-[#FFB000]">NO RECORDED BARS FOR {ticker}</span>
-        <span class="text-2xs text-[#5E6D82] mt-1">Market is CLOSED. Waiting for live trading session.</span>
+      <div class="absolute inset-0 flex flex-col items-center justify-center bg-[#06090F]/90 text-[#8B98A5] font-mono z-10 pointer-events-none px-4 text-center">
+        {#if isLoading}
+          <span class="text-sm font-semibold text-[#00D2FF]">LOADING LIVE {timeframe} BARS FOR {ticker}…</span>
+          <span class="text-2xs text-[#5E6D82] mt-1">Querying QARE-MM lakehouse &amp; Yahoo Finance feed.</span>
+        {:else if connState === "CONNECTED"}
+          <span class="text-sm font-semibold text-[#FFB000]">NO HISTORICAL BARS AVAILABLE FOR {ticker} ({timeframe})</span>
+          <span class="text-2xs text-[#5E6D82] mt-1">No simulated fallback bars rendered. Verify ticker symbol or switch to 1D.</span>
+        {:else}
+          <span class="text-sm font-semibold text-[#FF3344]">ENGINE DAEMON OFFLINE — NO DATA FOR {ticker}</span>
+          <span class="text-2xs text-[#5E6D82] mt-1">Connect live Python engine on ws://127.0.0.1:8194 to render real OHLCV candles.</span>
+        {/if}
       </div>
     {/if}
   </div>
