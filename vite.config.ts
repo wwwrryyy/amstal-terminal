@@ -17,8 +17,16 @@ export default defineConfig({
   },
   envPrefix: ["VITE_", "TAURI_ENV_", "TAURI_"],
   build: {
-    target: platform === "windows" ? "chrome105" : "safari15",
+    target: platform === "windows" || process.platform === "win32" ? "chrome105" : "safari15",
     minify: !isDebug ? "esbuild" : false,
     sourcemap: isDebug,
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          charts: ["lightweight-charts"],
+        },
+      },
+    },
   },
 });
