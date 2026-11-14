@@ -27,7 +27,6 @@ For the complete end-to-end specifications, consult:
 
 3. **Bloomberg Workflow Re-Creation**:
    - **Mnemonic Lexer & Grammar**: Reverse Polish Notation command bar supporting syntax like `NVDA US <EQUITY> FA <GO>`.
-   - **Starboard Keyboard Emulation**: Dedicated color-coded key mapping (Yellow asset class keys, Green `<GO>`, Red `<CANCEL>`, Help `<F1>`).
    - **Dockable 4-Tile Grid**: Responsive layout managed via Svelte 5 runes (`$state`, `$derived`) and `paneforge` with cross-panel ticker synchronization.
 
 4. **Two-Tier Analytical Modules**:
